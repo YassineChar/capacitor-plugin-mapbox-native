@@ -1,0 +1,65 @@
+{
+  "name": "@whisperspots/capacitor-mapbox-native",
+  "version": "1.0.0",
+  "description": "Mapbox Native SDK plugin for Capacitor (Android only)",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "unpkg": "dist/plugin.js",
+  "files": [
+    "android/",
+    "dist/",
+    "ios/",
+    "WhisperSpotsMapboxNative.podspec"
+  ],
+  "author": "WhisperSpots Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YassineChar/capacitor-plugin-mapbox-native.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YassineChar/capacitor-plugin-mapbox-native/issues"
+  },
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "native",
+    "mapbox",
+    "android"
+  ],
+  "scripts": {
+    "verify": "npm run verify:android",
+    "verify:android": "cd android && ./gradlew clean build test && cd ..",
+    "lint": "npm run eslint && npm run prettier -- --check",
+    "fmt": "npm run eslint -- --fix && npm run prettier -- --write",
+    "eslint": "eslint . --ext ts",
+    "prettier": "prettier \"**/*.{css,html,ts,js,java}\"",
+    "docgen": "docgen --api WhisperSpotsMapboxNativePlugin --output-readme README.md --output-json dist/docs.json",
+    "build": "npm run clean && npm run docgen && tsc && rollup -c rollup.config.js",
+    "clean": "rimraf ./dist",
+    "watch": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/docgen": "^0.2.2",
+    "@ionic/eslint-config": "^0.4.0",
+    "@ionic/prettier-config": "^4.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "prettier-plugin-java": "^2.6.0",
+    "rimraf": "^5.0.5",
+    "rollup": "^4.9.6",
+    "typescript": "~5.3.3"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^7.0.0"
+  },
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}
