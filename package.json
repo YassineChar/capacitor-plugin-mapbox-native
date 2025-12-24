@@ -47,10 +47,11 @@
     "@capacitor/docgen": "^0.2.2",
     "@ionic/eslint-config": "^0.4.0",
     "@ionic/prettier-config": "^4.0.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
     "eslint": "^8.57.0",
     "prettier": "^3.2.5",
     "prettier-plugin-java": "^2.6.0",
-    "rimraf": "^5.0.5",
+    "rimraf": "^5.0.10",
     "rollup": "^4.9.6",
     "typescript": "~5.3.3"
   },
