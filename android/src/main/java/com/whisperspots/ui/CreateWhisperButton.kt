@@ -6,8 +6,6 @@ import android.graphics.*
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
-import androidx.core.content.ContextCompat
-import com.whisperspots.app.R
 
 class CreateWhisperButton @JvmOverloads constructor(
     context: Context,
@@ -151,13 +149,13 @@ class CreateWhisperButton @JvmOverloads constructor(
             invalidate()
         }
         animator.start()
-        setTag(R.id.spinner_animator_tag, animator)
+        setTag("spinner_animator_tag".hashCode(), animator)
     }
     
     private fun stopSpinAnimation() {
-        val animator = getTag(R.id.spinner_animator_tag) as? ObjectAnimator
+        val animator = getTag("spinner_animator_tag".hashCode()) as? ObjectAnimator
         animator?.cancel()
-        setTag(R.id.spinner_animator_tag, null)
+        setTag("spinner_animator_tag".hashCode(), null)
         rotationAngle = 0f
     }
     
