@@ -564,7 +564,7 @@ class MapboxNativePlugin : Plugin() {
                 )
                 
                 if (distance < 30.0) {
-                    val data = annotation.getData()
+                    val data = annotation.getData()?.asJsonObject
                     if (data != null) {
                         if (data.has("isCluster") && data.get("isCluster").asBoolean) {
                             val count = data.get("count").asInt
