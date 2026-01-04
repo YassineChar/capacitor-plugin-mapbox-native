@@ -114,12 +114,15 @@ class MapboxNativePlugin : Plugin() {
                 val layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
-                )
+                ).apply {
+                    topMargin = mapTopOffset.toInt()
+                    bottomMargin = mapHeightOffset.toInt()
+                }
                 
                 mapView.layoutParams = layoutParams
                 mapView.visibility = View.GONE
                 
-                android.util.Log.i("MapboxNativePlugin", "➕ Adding MapView to rootView (visibility: GONE)")
+                android.util.Log.i("MapboxNativePlugin", "➕ Adding MapView to rootView (visibility: GONE) with topMargin=${mapTopOffset.toInt()}, bottomMargin=${mapHeightOffset.toInt()}")
                 
                 rootView.addView(mapView, 0)
                 
@@ -758,6 +761,8 @@ class MapboxNativePlugin : Plugin() {
         val centerY = size / 2
         val radius = (size - 6f) / 2
         
+        canvas.save()
+        
         val circlePath = Path()
         circlePath.addCircle(centerX, centerY, radius, Path.Direction.CW)
         canvas.clipPath(circlePath)
@@ -783,7 +788,6 @@ class MapboxNativePlugin : Plugin() {
         }
         
         canvas.restore()
-        canvas.save()
         
         paint.color = borderColor
         paint.style = Paint.Style.STROKE
