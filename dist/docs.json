@@ -1,0 +1,203 @@
+{
+  "api": {
+    "name": "WhisperSpotsMapboxNativePlugin",
+    "slug": "whisperspotsmapboxnativeplugin",
+    "docs": "",
+    "tags": [],
+    "methods": [
+      {
+        "name": "echo",
+        "signature": "(options: { value: string; }) => Promise<{ value: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ value: string; }"
+          }
+        ],
+        "returns": "Promise<{ value: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "echo"
+      },
+      {
+        "name": "initMapbox",
+        "signature": "(options: { topOffset?: number; heightOffset?: number; }) => Promise<{ status: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ topOffset?: number | undefined; heightOffset?: number | undefined; }"
+          }
+        ],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "initmapbox"
+      },
+      {
+        "name": "showMapbox",
+        "signature": "() => Promise<{ status: string; }>",
+        "parameters": [],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "showmapbox"
+      },
+      {
+        "name": "hideMapbox",
+        "signature": "() => Promise<{ status: string; }>",
+        "parameters": [],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "hidemapbox"
+      },
+      {
+        "name": "closeMapbox",
+        "signature": "() => Promise<{ status: string; }>",
+        "parameters": [],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "closemapbox"
+      },
+      {
+        "name": "isMapboxVisible",
+        "signature": "() => Promise<{ status: number; }>",
+        "parameters": [],
+        "returns": "Promise<{ status: number; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "ismapboxvisible"
+      },
+      {
+        "name": "setValuesMapbox",
+        "signature": "(options: { dataPoints: any[]; moreWhispersTranslation?: string; clusteringThreshold?: number; }) => Promise<{ status: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ dataPoints: any[]; moreWhispersTranslation?: string | undefined; clusteringThreshold?: number | undefined; }"
+          }
+        ],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "setvaluesmapbox"
+      },
+      {
+        "name": "setCenterPoint",
+        "signature": "(options: { latitude: number; longitude: number; animated?: boolean; }) => Promise<{ status: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ latitude: number; longitude: number; animated?: boolean | undefined; }"
+          }
+        ],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "setcenterpoint"
+      },
+      {
+        "name": "setCenterAndZoom",
+        "signature": "(options: { latitude: number; longitude: number; zoom: number; animated?: boolean; }) => Promise<{ status: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ latitude: number; longitude: number; zoom: number; animated?: boolean | undefined; }"
+          }
+        ],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "setcenterandzoom"
+      },
+      {
+        "name": "setZoomLevel",
+        "signature": "(options: { zoom: number; animated?: boolean; }) => Promise<{ status: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ zoom: number; animated?: boolean | undefined; }"
+          }
+        ],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "setzoomlevel"
+      },
+      {
+        "name": "addCircle",
+        "signature": "(options: { latitude: number; longitude: number; radius: number; }) => Promise<{ status: string; circleId: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ latitude: number; longitude: number; radius: number; }"
+          }
+        ],
+        "returns": "Promise<{ status: string; circleId: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "addcircle"
+      },
+      {
+        "name": "removeCircle",
+        "signature": "() => Promise<{ status: string; }>",
+        "parameters": [],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "removecircle"
+      },
+      {
+        "name": "clearMarkers",
+        "signature": "() => Promise<{ status: string; }>",
+        "parameters": [],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "clearmarkers"
+      },
+      {
+        "name": "setMockUserLocation",
+        "signature": "(options: { latitude: number; longitude: number; }) => Promise<{ status: string; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ latitude: number; longitude: number; }"
+          }
+        ],
+        "returns": "Promise<{ status: string; }>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "setmockuserlocation"
+      }
+    ],
+    "properties": []
+  },
+  "interfaces": [],
+  "enums": [],
+  "typeAliases": [],
+  "pluginConfigs": []
+}
