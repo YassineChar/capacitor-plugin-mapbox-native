@@ -29,7 +29,6 @@ import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.net.URL
 import kotlin.math.pow
-import com.whisperspots.ui.WhisperHomeUIManager
 
 @CapacitorPlugin(name = "WhisperSpotsMapboxNative")
 class MapboxNativePlugin : Plugin() {
@@ -123,11 +122,6 @@ class MapboxNativePlugin : Plugin() {
                 val webView = bridge.webView
                 webView?.setBackgroundColor(Color.TRANSPARENT)
                 webView?.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                
-                val webViewInstance = webView as? android.webkit.WebView
-                if (webViewInstance != null) {
-                    WhisperHomeUIManager.shared.setup(activity, webViewInstance, this)
-                }
                 
                 call.resolve(JSObject().put("status", "success"))
                 
