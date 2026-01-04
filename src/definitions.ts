@@ -1,6 +1,12 @@
 export interface WhisperSpotsMapboxNativePlugin {
   echo(options: { value: string }): Promise<{ value: string }>;
-  initMapbox(options: { topOffset?: number; heightOffset?: number }): Promise<{ status: string }>;
+  initMapbox(options: { 
+    topOffset?: number; 
+    heightOffset?: number;
+    centerLat?: number;
+    centerLon?: number;
+    zoom?: number;
+  }): Promise<{ status: string }>;
   showMapbox(): Promise<{ status: string }>;
   hideMapbox(): Promise<{ status: string }>;
   closeMapbox(): Promise<{ status: string }>;

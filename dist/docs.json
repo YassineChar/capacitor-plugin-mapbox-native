@@ -23,12 +23,12 @@
       },
       {
         "name": "initMapbox",
-        "signature": "(options: { topOffset?: number; heightOffset?: number; }) => Promise<{ status: string; }>",
+        "signature": "(options: { topOffset?: number; heightOffset?: number; centerLat?: number; centerLon?: number; zoom?: number; }) => Promise<{ status: string; }>",
         "parameters": [
           {
             "name": "options",
             "docs": "",
-            "type": "{ topOffset?: number | undefined; heightOffset?: number | undefined; }"
+            "type": "{ topOffset?: number | undefined; heightOffset?: number | undefined; centerLat?: number | undefined; centerLon?: number | undefined; zoom?: number | undefined; }"
           }
         ],
         "returns": "Promise<{ status: string; }>",
