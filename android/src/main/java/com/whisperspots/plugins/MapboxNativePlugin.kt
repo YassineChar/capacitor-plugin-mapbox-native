@@ -147,16 +147,7 @@ class MapboxNativePlugin : Plugin() {
                     val centerLon = call.getDouble("centerLon") ?: 0.0
                     val zoom = call.getDouble("zoom") ?: 14.0
                     
-                    val lastLocation = mapView.location.locationProvider?.getLastLocation()
-                    
-                    if (lastLocation != null) {
-                        val cameraOptions = CameraOptions.Builder()
-                            .center(Point.fromLngLat(lastLocation.longitude, lastLocation.latitude))
-                            .zoom(zoom)
-                            .build()
-                        mapboxMap?.setCamera(cameraOptions)
-                        android.util.Log.i("MapboxNativePlugin", "📍 Centered on GPS location: ${lastLocation.latitude}, ${lastLocation.longitude}")
-                    } else if (centerLat != 0.0 && centerLon != 0.0) {
+                    if (centerLat != 0.0 && centerLon != 0.0) {
                         val cameraOptions = CameraOptions.Builder()
                             .center(Point.fromLngLat(centerLon, centerLat))
                             .zoom(zoom)
@@ -164,7 +155,7 @@ class MapboxNativePlugin : Plugin() {
                         mapboxMap?.setCamera(cameraOptions)
                         android.util.Log.i("MapboxNativePlugin", "📍 Centered on provided coords: $centerLat, $centerLon")
                     } else {
-                        android.util.Log.w("MapboxNativePlugin", "⚠️ No GPS or coords provided, using Mapbox default")
+                        android.util.Log.w("MapboxNativePlugin", "⚠️ No coords provided, using Mapbox default")
                     }
                     
                     setupMapListeners()
@@ -576,7 +567,7 @@ class MapboxNativePlugin : Plugin() {
                     val data = annotation.getData()
                     if (data != null) {
                         if (data.has("isCluster") && data.get("isCluster").asBoolean) {
-                            val count = data.get("count")?.asInt ?: 0
+                            val count = data.get("count").asInt
                             notifyListeners("onClusterTap", JSObject().apply {
                                 put("count", count)
                                 put("latitude", annotation.point.latitude())
@@ -586,8 +577,8 @@ class MapboxNativePlugin : Plugin() {
                         }
                         
                         if (data.has("whisperId")) {
-                            val whisperId = data.get("whisperId")?.asString
-                            val isClickable = data.get("isClickable")?.asBoolean ?: true
+                            val whisperId = data.get("whisperId").asString
+                            val isClickable = if (data.has("isClickable")) data.get("isClickable").asBoolean else true
                             
                             if (isClickable && whisperId != null) {
                                 notifyListeners("onWhisperTap", JSObject().apply {
