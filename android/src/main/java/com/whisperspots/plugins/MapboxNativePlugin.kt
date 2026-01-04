@@ -117,13 +117,16 @@ class MapboxNativePlugin : Plugin() {
                     }
                     
                     setupMapListeners()
+                    
+                    android.util.Log.i("MapboxNativePlugin", "✅ Style loaded, map fully ready")
+                    
+                    // Resolve ONLY when map is fully initialized
+                    call.resolve(JSObject().put("status", "success"))
                 }
                 
                 val webView = bridge.webView
                 webView?.setBackgroundColor(Color.TRANSPARENT)
                 webView?.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                
-                call.resolve(JSObject().put("status", "success"))
                 
             } catch (e: Exception) {
                 call.reject("Failed to initialize map: ${e.message}", e)
