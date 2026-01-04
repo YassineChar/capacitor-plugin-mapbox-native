@@ -121,18 +121,6 @@ class MapboxNativePlugin : Plugin() {
                         pulsingEnabled = true
                     }
                     
-                    mapView.logo.updateSettings {
-                        enabled = false
-                    }
-                    
-                    mapView.attribution.updateSettings {
-                        enabled = false
-                    }
-                    
-                    mapView.compass.updateSettings {
-                        enabled = false
-                    }
-                    
                     val centerLat = call.getDouble("centerLat") ?: 0.0
                     val centerLon = call.getDouble("centerLon") ?: 0.0
                     val zoom = call.getDouble("zoom") ?: 14.0
@@ -221,103 +209,6 @@ class MapboxNativePlugin : Plugin() {
                 else -> 2
             }
             call.resolve(JSObject().put("status", status))
-        }
-    }
-    
-    @PluginMethod
-    fun setCenterPoint(call: PluginCall) {
-        bridge.activity.runOnUiThread {
-            if (mapboxMap == null) {
-                call.reject("Map is not initialized")
-                return@runOnUiThread
-            }
-            
-            val latitude = call.getDouble("latitude")
-            val longitude = call.getDouble("longitude")
-            val animated = call.getBoolean("animated") ?: true
-            
-            if (latitude == null || longitude == null) {
-                call.reject("latitude and longitude are required")
-                return@runOnUiThread
-            }
-            
-            val cameraOptions = CameraOptions.Builder()
-                .center(Point.fromLngLat(longitude, latitude))
-                .build()
-            
-            if (animated) {
-                mapboxMap?.flyTo(cameraOptions)
-            } else {
-                mapboxMap?.setCamera(cameraOptions)
-            }
-            
-            call.resolve(JSObject().put("status", "success"))
-        }
-    }
-    
-    @PluginMethod
-    fun setCenterAndZoom(call: PluginCall) {
-        bridge.activity.runOnUiThread {
-            if (mapboxMap == null) {
-                call.reject("Map is not initialized")
-                return@runOnUiThread
-            }
-            
-            val latitude = call.getDouble("latitude")
-            val longitude = call.getDouble("longitude")
-            val zoom = call.getDouble("zoom")
-            val animated = call.getBoolean("animated") ?: true
-            
-            if (latitude == null || longitude == null || zoom == null) {
-                call.reject("latitude, longitude, and zoom are required")
-                return@runOnUiThread
-            }
-            
-            val cameraOptions = CameraOptions.Builder()
-                .center(Point.fromLngLat(longitude, latitude))
-                .zoom(zoom)
-                .build()
-            
-            if (animated) {
-                mapboxMap?.flyTo(cameraOptions)
-            } else {
-                mapboxMap?.setCamera(cameraOptions)
-            }
-            
-            call.resolve(JSObject().put("status", "success"))
-        }
-    }
-    
-    @PluginMethod
-    fun setZoomLevel(call: PluginCall) {
-        bridge.activity.runOnUiThread {
-            if (mapboxMap == null) {
-                call.reject("Map is not initialized")
-                return@runOnUiThread
-            }
-            
-            val zoom = call.getDouble("zoom")
-            val animated = call.getBoolean("animated") ?: true
-            
-            if (zoom == null) {
-                call.reject("Zoom level is required")
-                return@runOnUiThread
-            }
-            
-            val currentCenter = mapboxMap?.cameraState?.center ?: return@runOnUiThread
-            
-            val cameraOptions = CameraOptions.Builder()
-                .center(currentCenter)
-                .zoom(zoom)
-                .build()
-            
-            if (animated) {
-                mapboxMap?.flyTo(cameraOptions)
-            } else {
-                mapboxMap?.setCamera(cameraOptions)
-            }
-            
-            call.resolve(JSObject().put("status", "success"))
         }
     }
     
@@ -460,11 +351,7 @@ class MapboxNativePlugin : Plugin() {
                 .center(Point.fromLngLat(longitude, latitude))
                 .build()
             
-            if (animated) {
-                mapboxMap?.flyTo(cameraOptions)
-            } else {
-                mapboxMap?.setCamera(cameraOptions)
-            }
+            mapboxMap?.setCamera(cameraOptions)
             
             call.resolve(JSObject().put("status", "success"))
         }
@@ -493,11 +380,7 @@ class MapboxNativePlugin : Plugin() {
                 .zoom(zoom)
                 .build()
             
-            if (animated) {
-                mapboxMap?.flyTo(cameraOptions)
-            } else {
-                mapboxMap?.setCamera(cameraOptions)
-            }
+            mapboxMap?.setCamera(cameraOptions)
             
             call.resolve(JSObject().put("status", "success"))
         }
@@ -526,11 +409,7 @@ class MapboxNativePlugin : Plugin() {
                 .zoom(zoom)
                 .build()
             
-            if (animated) {
-                mapboxMap?.flyTo(cameraOptions)
-            } else {
-                mapboxMap?.setCamera(cameraOptions)
-            }
+            mapboxMap?.setCamera(cameraOptions)
             
             call.resolve(JSObject().put("status", "success"))
         }
