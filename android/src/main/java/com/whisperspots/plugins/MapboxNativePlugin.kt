@@ -147,12 +147,24 @@ class MapboxNativePlugin : Plugin() {
                     val centerLon = call.getDouble("centerLon") ?: 0.0
                     val zoom = call.getDouble("zoom") ?: 14.0
                     
-                    if (centerLat != 0.0 && centerLon != 0.0) {
+                    val lastLocation = mapView.location.locationProvider?.getLastLocation()
+                    
+                    if (lastLocation != null) {
+                        val cameraOptions = CameraOptions.Builder()
+                            .center(Point.fromLngLat(lastLocation.longitude, lastLocation.latitude))
+                            .zoom(zoom)
+                            .build()
+                        mapboxMap?.setCamera(cameraOptions)
+                        android.util.Log.i("MapboxNativePlugin", "📍 Centered on GPS location: ${lastLocation.latitude}, ${lastLocation.longitude}")
+                    } else if (centerLat != 0.0 && centerLon != 0.0) {
                         val cameraOptions = CameraOptions.Builder()
                             .center(Point.fromLngLat(centerLon, centerLat))
                             .zoom(zoom)
                             .build()
                         mapboxMap?.setCamera(cameraOptions)
+                        android.util.Log.i("MapboxNativePlugin", "📍 Centered on provided coords: $centerLat, $centerLon")
+                    } else {
+                        android.util.Log.w("MapboxNativePlugin", "⚠️ No GPS or coords provided, using Mapbox default")
                     }
                     
                     setupMapListeners()
@@ -550,6 +562,44 @@ class MapboxNativePlugin : Plugin() {
         mapView?.mapboxMap?.addOnMapClickListener(OnMapClickListener { point ->
             mapView?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             
+            val clickedPoint = mapboxMap?.pixelForCoordinate(point) ?: return@OnMapClickListener true
+            
+            pointAnnotationManager?.annotations?.forEach { annotation ->
+                val annotationPoint = mapboxMap?.pixelForCoordinate(annotation.point) ?: return@forEach
+                
+                val distance = kotlin.math.sqrt(
+                    (clickedPoint.x - annotationPoint.x).toDouble().pow(2) + 
+                    (clickedPoint.y - annotationPoint.y).toDouble().pow(2)
+                )
+                
+                if (distance < 30.0) {
+                    val data = annotation.getData()
+                    if (data != null) {
+                        if (data.has("isCluster") && data.get("isCluster").asBoolean) {
+                            val count = data.get("count")?.asInt ?: 0
+                            notifyListeners("onClusterTap", JSObject().apply {
+                                put("count", count)
+                                put("latitude", annotation.point.latitude())
+                                put("longitude", annotation.point.longitude())
+                            })
+                            return@OnMapClickListener true
+                        }
+                        
+                        if (data.has("whisperId")) {
+                            val whisperId = data.get("whisperId")?.asString
+                            val isClickable = data.get("isClickable")?.asBoolean ?: true
+                            
+                            if (isClickable && whisperId != null) {
+                                notifyListeners("onWhisperTap", JSObject().apply {
+                                    put("whisperId", whisperId)
+                                })
+                                return@OnMapClickListener true
+                            }
+                        }
+                    }
+                }
+            }
+            
             true
         })
         
@@ -709,7 +759,7 @@ class MapboxNativePlugin : Plugin() {
         val canvas = Canvas(bitmap)
         
         val borderColor = getBorderColorFromExpiry(expiryColor)
-        val bgColor = parseHexColor(avatarColor) ?: Color.parseColor("#F2514D")
+        val bgColor = parseHexColor(avatarColor) ?: Color.parseColor("#9CA3AF")
         
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         
@@ -717,26 +767,32 @@ class MapboxNativePlugin : Plugin() {
         val centerY = size / 2
         val radius = (size - 6f) / 2
         
-        paint.color = bgColor
-        canvas.drawCircle(centerX, centerY, radius, paint)
+        val circlePath = Path()
+        circlePath.addCircle(centerX, centerY, radius, Path.Direction.CW)
+        canvas.clipPath(circlePath)
         
         if (!profileImageUrl.isNullOrEmpty()) {
             try {
                 val url = URL(profileImageUrl)
                 val profileBitmap = BitmapFactory.decodeStream(url.openStream())
                 
-                val scaledBitmap = Bitmap.createScaledBitmap(profileBitmap, (radius * 2).toInt(), (radius * 2).toInt(), true)
+                val scaledBitmap = Bitmap.createScaledBitmap(
+                    profileBitmap,
+                    (radius * 2).toInt(),
+                    (radius * 2).toInt(),
+                    true
+                )
                 
-                val shader = BitmapShader(scaledBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-                paint.shader = shader
-                canvas.drawCircle(centerX, centerY, radius, paint)
-                paint.shader = null
+                canvas.drawBitmap(scaledBitmap, centerX - radius, centerY - radius, paint)
             } catch (e: Exception) {
-                drawInitialsOrDefault(canvas, paint, initials, size, centerX, centerY)
+                drawBackgroundAndContent(canvas, paint, bgColor, initials, size, centerX, centerY, radius)
             }
         } else {
-            drawInitialsOrDefault(canvas, paint, initials, size, centerX, centerY)
+            drawBackgroundAndContent(canvas, paint, bgColor, initials, size, centerX, centerY, radius)
         }
+        
+        canvas.restore()
+        canvas.save()
         
         paint.color = borderColor
         paint.style = Paint.Style.STROKE
@@ -744,6 +800,44 @@ class MapboxNativePlugin : Plugin() {
         canvas.drawCircle(centerX, centerY, radius, paint)
         
         return bitmap
+    }
+    
+    private fun drawBackgroundAndContent(
+        canvas: Canvas,
+        paint: Paint,
+        bgColor: Int,
+        initials: String?,
+        size: Float,
+        centerX: Float,
+        centerY: Float,
+        radius: Float
+    ) {
+        paint.style = Paint.Style.FILL
+        paint.color = bgColor
+        canvas.drawCircle(centerX, centerY, radius, paint)
+        
+        if (!initials.isNullOrEmpty() && initials != "?") {
+            paint.color = Color.WHITE
+            paint.textSize = size * 0.4f
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            
+            val textBounds = Rect()
+            paint.getTextBounds(initials, 0, initials.length, textBounds)
+            val textY = centerY + (textBounds.height() / 2)
+            
+            canvas.drawText(initials, centerX, textY, paint)
+        } else {
+            paint.color = Color.WHITE
+            
+            val headRadius = radius * 0.15f
+            val headCenterY = centerY - (radius * 0.3f)
+            canvas.drawCircle(centerX, headCenterY, headRadius, paint)
+            
+            val bodyRadius = radius * 0.25f
+            val bodyCenterY = centerY + (radius * 0.5f)
+            canvas.drawCircle(centerX, bodyCenterY, bodyRadius, paint)
+        }
     }
     
     private fun generateClusterMarkerBitmap(
@@ -787,30 +881,6 @@ class MapboxNativePlugin : Plugin() {
         canvas.drawText(moreText, textX, textY, textPaint)
         
         return bitmap
-    }
-    
-    private fun drawInitialsOrDefault(canvas: Canvas, paint: Paint, initials: String?, size: Float, centerX: Float, centerY: Float) {
-        if (!initials.isNullOrEmpty() && initials != "?") {
-            paint.color = Color.WHITE
-            paint.textSize = size * 0.4f
-            paint.textAlign = Paint.Align.CENTER
-            paint.typeface = Typeface.DEFAULT_BOLD
-            
-            val textBounds = Rect()
-            paint.getTextBounds(initials, 0, initials.length, textBounds)
-            
-            canvas.drawText(initials, centerX, centerY - textBounds.exactCenterY(), paint)
-        } else {
-            paint.color = Color.WHITE
-            
-            val headRadius = (size - 6f) * 0.15f
-            val headCenterY = (size - 6f) * 0.35f + 3f
-            canvas.drawCircle(centerX, headCenterY, headRadius, paint)
-            
-            val bodyRadius = (size - 6f) * 0.25f
-            val bodyCenterY = (size - 6f) * 0.75f + 3f
-            canvas.drawCircle(centerX, bodyCenterY, bodyRadius, paint)
-        }
     }
     
     private fun createUserLocationBitmap(): Bitmap {
