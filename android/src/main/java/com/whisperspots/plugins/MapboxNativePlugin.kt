@@ -86,7 +86,7 @@ class MapboxNativePlugin : Plugin() {
                 
                 val mapView = MapView(context, MapInitOptions(
                     context = context,
-                    styleUri = Style.MAPBOX_STREETS
+                    styleUri = Style.DARK
                 ))
                 
                 this.mapView = mapView
@@ -111,7 +111,7 @@ class MapboxNativePlugin : Plugin() {
                 
                 this.mapboxMap = mapView.mapboxMap
                 
-                mapboxMap?.loadStyle(Style.MAPBOX_STREETS) { style ->
+                mapboxMap?.loadStyle(Style.DARK) { style ->
                     val annotationApi = mapView.annotations
                     pointAnnotationManager = annotationApi.createPointAnnotationManager()
                     circleAnnotationManager = annotationApi.createCircleAnnotationManager()
@@ -119,6 +119,30 @@ class MapboxNativePlugin : Plugin() {
                     mapView.location.updateSettings {
                         enabled = true
                         pulsingEnabled = true
+                    }
+                    
+                    mapView.logo.updateSettings {
+                        enabled = false
+                    }
+                    
+                    mapView.attribution.updateSettings {
+                        enabled = false
+                    }
+                    
+                    mapView.compass.updateSettings {
+                        enabled = false
+                    }
+                    
+                    val centerLat = call.getDouble("centerLat") ?: 0.0
+                    val centerLon = call.getDouble("centerLon") ?: 0.0
+                    val zoom = call.getDouble("zoom") ?: 14.0
+                    
+                    if (centerLat != 0.0 && centerLon != 0.0) {
+                        val cameraOptions = CameraOptions.Builder()
+                            .center(Point.fromLngLat(centerLon, centerLat))
+                            .zoom(zoom)
+                            .build()
+                        mapboxMap?.setCamera(cameraOptions)
                     }
                     
                     setupMapListeners()
@@ -197,6 +221,103 @@ class MapboxNativePlugin : Plugin() {
                 else -> 2
             }
             call.resolve(JSObject().put("status", status))
+        }
+    }
+    
+    @PluginMethod
+    fun setCenterPoint(call: PluginCall) {
+        bridge.activity.runOnUiThread {
+            if (mapboxMap == null) {
+                call.reject("Map is not initialized")
+                return@runOnUiThread
+            }
+            
+            val latitude = call.getDouble("latitude")
+            val longitude = call.getDouble("longitude")
+            val animated = call.getBoolean("animated") ?: true
+            
+            if (latitude == null || longitude == null) {
+                call.reject("latitude and longitude are required")
+                return@runOnUiThread
+            }
+            
+            val cameraOptions = CameraOptions.Builder()
+                .center(Point.fromLngLat(longitude, latitude))
+                .build()
+            
+            if (animated) {
+                mapboxMap?.flyTo(cameraOptions)
+            } else {
+                mapboxMap?.setCamera(cameraOptions)
+            }
+            
+            call.resolve(JSObject().put("status", "success"))
+        }
+    }
+    
+    @PluginMethod
+    fun setCenterAndZoom(call: PluginCall) {
+        bridge.activity.runOnUiThread {
+            if (mapboxMap == null) {
+                call.reject("Map is not initialized")
+                return@runOnUiThread
+            }
+            
+            val latitude = call.getDouble("latitude")
+            val longitude = call.getDouble("longitude")
+            val zoom = call.getDouble("zoom")
+            val animated = call.getBoolean("animated") ?: true
+            
+            if (latitude == null || longitude == null || zoom == null) {
+                call.reject("latitude, longitude, and zoom are required")
+                return@runOnUiThread
+            }
+            
+            val cameraOptions = CameraOptions.Builder()
+                .center(Point.fromLngLat(longitude, latitude))
+                .zoom(zoom)
+                .build()
+            
+            if (animated) {
+                mapboxMap?.flyTo(cameraOptions)
+            } else {
+                mapboxMap?.setCamera(cameraOptions)
+            }
+            
+            call.resolve(JSObject().put("status", "success"))
+        }
+    }
+    
+    @PluginMethod
+    fun setZoomLevel(call: PluginCall) {
+        bridge.activity.runOnUiThread {
+            if (mapboxMap == null) {
+                call.reject("Map is not initialized")
+                return@runOnUiThread
+            }
+            
+            val zoom = call.getDouble("zoom")
+            val animated = call.getBoolean("animated") ?: true
+            
+            if (zoom == null) {
+                call.reject("Zoom level is required")
+                return@runOnUiThread
+            }
+            
+            val currentCenter = mapboxMap?.cameraState?.center ?: return@runOnUiThread
+            
+            val cameraOptions = CameraOptions.Builder()
+                .center(currentCenter)
+                .zoom(zoom)
+                .build()
+            
+            if (animated) {
+                mapboxMap?.flyTo(cameraOptions)
+            } else {
+                mapboxMap?.setCamera(cameraOptions)
+            }
+            
+            call.resolve(JSObject().put("status", "success"))
         }
     }
     
@@ -326,21 +447,24 @@ class MapboxNativePlugin : Plugin() {
                 return@runOnUiThread
             }
             
-            val lat = call.getDouble("latitude")
-            val lon = call.getDouble("longitude")
+            val latitude = call.getDouble("latitude")
+            val longitude = call.getDouble("longitude")
+            val animated = call.getBoolean("animated") ?: true
             
-            if (lat == null || lon == null) {
+            if (latitude == null || longitude == null) {
                 call.reject("latitude and longitude are required")
                 return@runOnUiThread
             }
             
-            val animated = call.getBoolean("animated", true) ?: true
+            val cameraOptions = CameraOptions.Builder()
+                .center(Point.fromLngLat(longitude, latitude))
+                .build()
             
-            mapboxMap?.setCamera(
-                CameraOptions.Builder()
-                    .center(Point.fromLngLat(lon, lat))
-                    .build()
-            )
+            if (animated) {
+                mapboxMap?.flyTo(cameraOptions)
+            } else {
+                mapboxMap?.setCamera(cameraOptions)
+            }
             
             call.resolve(JSObject().put("status", "success"))
         }
@@ -354,21 +478,26 @@ class MapboxNativePlugin : Plugin() {
                 return@runOnUiThread
             }
             
-            val lat = call.getDouble("latitude")
-            val lon = call.getDouble("longitude")
+            val latitude = call.getDouble("latitude")
+            val longitude = call.getDouble("longitude")
             val zoom = call.getDouble("zoom")
+            val animated = call.getBoolean("animated") ?: true
             
-            if (lat == null || lon == null || zoom == null) {
+            if (latitude == null || longitude == null || zoom == null) {
                 call.reject("latitude, longitude, and zoom are required")
                 return@runOnUiThread
             }
             
-            mapboxMap?.setCamera(
-                CameraOptions.Builder()
-                    .center(Point.fromLngLat(lon, lat))
-                    .zoom(zoom)
-                    .build()
-            )
+            val cameraOptions = CameraOptions.Builder()
+                .center(Point.fromLngLat(longitude, latitude))
+                .zoom(zoom)
+                .build()
+            
+            if (animated) {
+                mapboxMap?.flyTo(cameraOptions)
+            } else {
+                mapboxMap?.setCamera(cameraOptions)
+            }
             
             call.resolve(JSObject().put("status", "success"))
         }
@@ -383,16 +512,25 @@ class MapboxNativePlugin : Plugin() {
             }
             
             val zoom = call.getDouble("zoom")
+            val animated = call.getBoolean("animated") ?: true
+            
             if (zoom == null) {
                 call.reject("Zoom level is required")
                 return@runOnUiThread
             }
             
-            mapboxMap?.setCamera(
-                CameraOptions.Builder()
-                    .zoom(zoom)
-                    .build()
-            )
+            val currentCenter = mapboxMap?.cameraState?.center ?: return@runOnUiThread
+            
+            val cameraOptions = CameraOptions.Builder()
+                .center(currentCenter)
+                .zoom(zoom)
+                .build()
+            
+            if (animated) {
+                mapboxMap?.flyTo(cameraOptions)
+            } else {
+                mapboxMap?.setCamera(cameraOptions)
+            }
             
             call.resolve(JSObject().put("status", "success"))
         }
