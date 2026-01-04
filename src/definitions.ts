@@ -6,6 +6,7 @@ export interface WhisperSpotsMapboxNativePlugin {
     centerLat?: number;
     centerLon?: number;
     zoom?: number;
+    styleUri?: string;
   }): Promise<{ status: string }>;
   showMapbox(): Promise<{ status: string }>;
   hideMapbox(): Promise<{ status: string }>;

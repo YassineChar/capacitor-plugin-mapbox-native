@@ -37,6 +37,7 @@ class MapboxNativePlugin : Plugin() {
     private var mapboxMap: MapboxMap? = null
     private var pointAnnotationManager: PointAnnotationManager? = null
     private var circleAnnotationManager: CircleAnnotationManager? = null
+    private var statusBarGradientView: View? = null
     
     private val whisperAnnotations = mutableMapOf<String, PointAnnotation>()
     private val clusterAnnotations = mutableListOf<ClusterAnnotationData>()
@@ -84,9 +85,27 @@ class MapboxNativePlugin : Plugin() {
                 
                 android.util.Log.i("MapboxNativePlugin", "🏗️ Creating MapView...")
                 
+                val styleUri = call.getString("styleUri") ?: run {
+                    val nightModeFlags = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                    when (nightModeFlags) {
+                        android.content.res.Configuration.UI_MODE_NIGHT_YES -> {
+                            android.util.Log.i("MapboxNativePlugin", "🌙 Dark mode detected - using night style")
+                            "mapbox://styles/zpalah/cmfwv2ibl000701r3398e20ps"
+                        }
+                        android.content.res.Configuration.UI_MODE_NIGHT_NO -> {
+                            android.util.Log.i("MapboxNativePlugin", "☀️ Light mode detected - using day style")
+                            "mapbox://styles/zpalah/cmfwvtnd200dx01sbb5y043o7"
+                        }
+                        else -> {
+                            android.util.Log.i("MapboxNativePlugin", "🌓 Default mode - using night style")
+                            "mapbox://styles/zpalah/cmfwv2ibl000701r3398e20ps"
+                        }
+                    }
+                }
+                
                 val mapView = MapView(context, MapInitOptions(
                     context = context,
-                    styleUri = Style.DARK
+                    styleUri = styleUri
                 ))
                 
                 this.mapView = mapView
@@ -104,6 +123,9 @@ class MapboxNativePlugin : Plugin() {
                 
                 rootView.addView(mapView, 0)
                 
+                android.util.Log.i("MapboxNativePlugin", "🎨 Creating status bar gradient overlay...")
+                createStatusBarGradient(activity, rootView)
+                
                 val webView = bridge.webView
                 webView?.setBackgroundColor(Color.TRANSPARENT)
                 webView?.setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -111,7 +133,7 @@ class MapboxNativePlugin : Plugin() {
                 
                 this.mapboxMap = mapView.mapboxMap
                 
-                mapboxMap?.loadStyle(Style.DARK) { style ->
+                mapboxMap?.loadStyle(styleUri) { style ->
                     val annotationApi = mapView.annotations
                     pointAnnotationManager = annotationApi.createPointAnnotationManager()
                     circleAnnotationManager = annotationApi.createCircleAnnotationManager()
@@ -159,6 +181,9 @@ class MapboxNativePlugin : Plugin() {
             android.util.Log.i("MapboxNativePlugin", "✅ Setting mapView visibility to VISIBLE")
             mapView?.visibility = View.VISIBLE
             
+            android.util.Log.i("MapboxNativePlugin", "🌟 Showing status bar gradient")
+            statusBarGradientView?.visibility = View.VISIBLE
+            
             android.util.Log.i("MapboxNativePlugin", "🔼 Bringing MapView to front (z-index fix)")
             mapView?.bringToFront()
             
@@ -177,6 +202,7 @@ class MapboxNativePlugin : Plugin() {
             }
             
             mapView?.visibility = View.GONE
+            statusBarGradientView?.visibility = View.GONE
             call.resolve(JSObject().put("status", "success"))
         }
     }
@@ -859,6 +885,43 @@ class MapboxNativePlugin : Plugin() {
         val longitude: Double,
         val count: Int
     )
+    
+    private fun createStatusBarGradient(activity: android.app.Activity, rootView: FrameLayout) {
+        val statusBarHeight = getStatusBarHeight(activity)
+        val gradientView = View(activity)
+        
+        val gradientDrawable = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                Color.argb(153, 0, 0, 0),
+                Color.argb(0, 0, 0, 0)
+            )
+        )
+        
+        gradientView.background = gradientDrawable
+        gradientView.elevation = 10f
+        
+        val layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            statusBarHeight
+        )
+        gradientView.layoutParams = layoutParams
+        gradientView.visibility = View.GONE
+        
+        rootView.addView(gradientView)
+        this.statusBarGradientView = gradientView
+        
+        android.util.Log.i("MapboxNativePlugin", "✅ Status bar gradient created (height: ${statusBarHeight}px)")
+    }
+    
+    private fun getStatusBarHeight(activity: android.app.Activity): Int {
+        var result = 0
+        val resourceId = activity.resources.getIdentifier("status_bar_height", "dimen", "android")
+        if (resourceId > 0) {
+            result = activity.resources.getDimensionPixelSize(resourceId)
+        }
+        return result
+    }
     
     override fun handleOnDestroy() {
         super.handleOnDestroy()

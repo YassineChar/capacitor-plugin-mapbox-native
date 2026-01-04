@@ -10,6 +10,7 @@ export interface WhisperSpotsMapboxNativePlugin {
         centerLat?: number;
         centerLon?: number;
         zoom?: number;
+        styleUri?: string;
     }): Promise<{
         status: string;
     }>;
