@@ -104,6 +104,11 @@ class MapboxNativePlugin : Plugin() {
                 
                 rootView.addView(mapView, 0)
                 
+                val webView = bridge.webView
+                webView?.setBackgroundColor(Color.TRANSPARENT)
+                webView?.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                android.util.Log.i("MapboxNativePlugin", "🎨 WebView set to TRANSPARENT")
+                
                 this.mapboxMap = mapView.mapboxMap
                 
                 mapboxMap?.loadStyle(Style.MAPBOX_STREETS) { style ->
@@ -120,13 +125,8 @@ class MapboxNativePlugin : Plugin() {
                     
                     android.util.Log.i("MapboxNativePlugin", "✅ Style loaded, map fully ready")
                     
-                    // Resolve ONLY when map is fully initialized
                     call.resolve(JSObject().put("status", "success"))
                 }
-                
-                val webView = bridge.webView
-                webView?.setBackgroundColor(Color.TRANSPARENT)
-                webView?.setLayerType(View.LAYER_TYPE_HARDWARE, null)
                 
             } catch (e: Exception) {
                 call.reject("Failed to initialize map: ${e.message}", e)
@@ -146,6 +146,12 @@ class MapboxNativePlugin : Plugin() {
             
             android.util.Log.i("MapboxNativePlugin", "✅ Setting mapView visibility to VISIBLE")
             mapView?.visibility = View.VISIBLE
+            
+            android.util.Log.i("MapboxNativePlugin", "🔼 Bringing MapView to front (z-index fix)")
+            mapView?.bringToFront()
+            
+            bridge.webView?.invalidate()
+            
             call.resolve(JSObject().put("status", "success"))
         }
     }
