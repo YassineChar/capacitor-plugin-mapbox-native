@@ -74,6 +74,8 @@ class MapboxNativePlugin : Plugin() {
     private var userLocation: Point? = null
     private val RECENTER_SHOW_THRESHOLD = 100.0 // meters - show button if map center > 100m from user
     private val RECENTER_HIDE_THRESHOLD = 50.0  // meters - hide button if map center < 50m from user
+    private var lastRecenterCheckTime = 0L
+    private val RECENTER_CHECK_THROTTLE = 1000L // Check recenter visibility max once per second
     
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     
@@ -643,10 +645,9 @@ class MapboxNativePlugin : Plugin() {
     
     @SuppressLint("ClickableViewAccessibility")
     private fun setupMapListeners() {
-        // Track user location updates for recenter button logic
+        // Track user location updates for recenter button logic (silently, no spam logs)
         mapView?.location?.addOnIndicatorPositionChangedListener { point ->
             userLocation = point
-            android.util.Log.d("MapboxNativePlugin", "📍 User location updated: ${point.latitude()}, ${point.longitude()}")
         }
         
         mapView?.mapboxMap?.addOnMapClickListener(OnMapClickListener { point ->
@@ -721,10 +722,18 @@ class MapboxNativePlugin : Plugin() {
      * 
      * Shows button if distance > 100m, hides if < 50m.
      * Hysteresis (50-100m gap) prevents flickering when user is near threshold.
+     * THROTTLED: Max once per second to avoid spam.
      */
     private fun checkRecenterButtonVisibility() {
         val userLoc = userLocation ?: return
         val mapCenter = mapboxMap?.cameraState?.center ?: return
+        
+        // THROTTLE: Check max once per second to avoid log/event spam
+        val now = System.currentTimeMillis()
+        if (now - lastRecenterCheckTime < RECENTER_CHECK_THROTTLE) {
+            return // Skip check, too soon since last one
+        }
+        lastRecenterCheckTime = now
         
         // Calculate distance between map center and user position
         val results = FloatArray(1)
