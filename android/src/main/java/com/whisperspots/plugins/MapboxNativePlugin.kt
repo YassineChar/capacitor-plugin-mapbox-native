@@ -148,6 +148,18 @@ class MapboxNativePlugin : Plugin() {
                 this.mapboxMap = mapView.mapboxMap
                 
                 mapboxMap?.loadStyle(styleUri) { style ->
+                    mapView.scalebar.updateSettings {
+                        enabled = false
+                    }
+
+                    val density = context.resources.displayMetrics.density
+
+                    mapView.compass.updateSettings {
+                        enabled = true
+                        marginTop = 56f * density
+                        marginRight = 16f * density
+                    }
+
                     val annotationApi = mapView.annotations
                     pointAnnotationManager = annotationApi.createPointAnnotationManager()
                     circleAnnotationManager = annotationApi.createCircleAnnotationManager()
@@ -156,6 +168,7 @@ class MapboxNativePlugin : Plugin() {
                         enabled = true
                         pulsingEnabled = true
                     }
+                    
                     
                     val centerLat = call.getDouble("centerLat") ?: 0.0
                     val centerLon = call.getDouble("centerLon") ?: 0.0
@@ -355,7 +368,7 @@ class MapboxNativePlugin : Plugin() {
                     opacity = if (point.has("opacity")) point.getDouble("opacity").toFloat() else 1.0f,
                     isClickable = if (point.has("isClickable")) point.getBoolean("isClickable") else true
                 )
-                
+                                
                 whisperAnnotationsList.add(annotationData)
             }
             
