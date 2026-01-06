@@ -15,9 +15,6 @@ import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
 import com.mapbox.maps.*
-import com.mapbox.maps.extension.style.expressions.dsl.generated.interpolate
-import com.mapbox.maps.extension.style.expressions.dsl.generated.linear
-import com.mapbox.maps.extension.style.expressions.dsl.generated.zoom
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.generated.circleLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.CirclePitchAlignment
@@ -148,11 +145,8 @@ class MapboxNativePlugin : Plugin() {
                     pointAnnotationManager = annotationApi.createPointAnnotationManager()
                     circleAnnotationManager = annotationApi.createCircleAnnotationManager()
                     
-                    // Disable Mapbox logo and attribution
-                    // mapView.logo.enabled = false
+                    // Disable Mapbox branding UI elements
                     mapView.attribution.enabled = false
-                    // mapView.compass.enabled = false
-                    mapView.scalebar.enabled = false
                     
                     mapView.location.updateSettings {
                         enabled = true
@@ -502,33 +496,15 @@ class MapboxNativePlugin : Plugin() {
                         }
                     )
                     
-                    // Add circle layer with FIXED radius in meters (iOS-like behavior)
-                    // Mapbox circleRadius is in pixels, so we use zoom interpolation
-                    // Formula: metersPerPixel = 156543.03392 * cos(lat) / 2^zoom
-                    // Inverted: pixelRadius = meters / metersPerPixel
-                    val latitude = center.latitude()
-                    
-                    // Calculate pixel radius for different zoom levels to maintain fixed meter radius
-                    // We need to create an interpolation expression that adjusts pixels as zoom changes
-                    val metersPerPixelAtZoom = { zoomLevel: Double ->
-                        156543.03392 * Math.cos(latitude * Math.PI / 180.0) / Math.pow(2.0, zoomLevel)
-                    }
-                    
-                    // Create zoom stops for smooth scaling (zoom 0 to 22)
-                    val radiusExpression = interpolate {
-                        linear()
-                        zoom()
-                        stop(0.0) { literal(radius / metersPerPixelAtZoom(0.0)) }
-                        stop(5.0) { literal(radius / metersPerPixelAtZoom(5.0)) }
-                        stop(10.0) { literal(radius / metersPerPixelAtZoom(10.0)) }
-                        stop(15.0) { literal(radius / metersPerPixelAtZoom(15.0)) }
-                        stop(20.0) { literal(radius / metersPerPixelAtZoom(20.0)) }
-                        stop(22.0) { literal(radius / metersPerPixelAtZoom(22.0)) }
-                    }
+                    // Calculate current pixel radius from meters
+                    // iOS MKCircle equivalent: radius is in METERS, we convert to pixels for current zoom
+                    val currentZoom = mapboxMap?.cameraState?.zoom ?: 14.0
+                    val metersPerPixel = 156543.03392 * Math.cos(lat * Math.PI / 180.0) / Math.pow(2.0, currentZoom)
+                    val pixelRadius = radius / metersPerPixel
                     
                     style.addLayer(
                         circleLayer(USER_CIRCLE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
-                            circleRadius(radiusExpression) // Dynamic pixel radius based on zoom
+                            circleRadius(pixelRadius)
                             circleColor("#00E5FF")
                             circleOpacity(0.3)
                             circleStrokeColor("#00E5FF")
@@ -537,6 +513,7 @@ class MapboxNativePlugin : Plugin() {
                         }
                     )
                     
+                    android.util.Log.i("MapboxNativePlugin", "✅ Circle added: radius=${radius}m, pixels=$pixelRadius at zoom=$currentZoom")
                     call.resolve(JSObject().put("status", "success").put("circleId", "user-circle"))
                 }
             } catch (e: Exception) {
@@ -688,8 +665,45 @@ class MapboxNativePlugin : Plugin() {
             if (zoomDelta >= 1.0 && lastClusteredZoomLevel > 0.0) {
                 reclusterWhispers()
             }
+            
+            // iOS MKCircle equivalent: update circle pixel radius on ANY camera change
+            // This keeps the circle at fixed METERS size (like iOS)
+            if (currentUserRadius != null && currentUserCircleCenter != null) {
+                updateCircleRadiusForCurrentZoom()
+            }
         
             lastZoom = currentZoom
+        }
+    }
+    
+    // iOS MKCircle equivalent: recalculate pixel radius to maintain fixed meters
+    private fun updateCircleRadiusForCurrentZoom() {
+        val radius = currentUserRadius ?: return
+        val center = currentUserCircleCenter ?: return
+        
+        mapboxMap?.getStyle { style ->
+            if (!style.styleLayerExists(USER_CIRCLE_LAYER_ID)) return@getStyle
+            
+            val currentZoom = mapboxMap?.cameraState?.zoom ?: 14.0
+            val latitude = center.latitude()
+            
+            // Calculate meters per pixel at current zoom and latitude
+            val metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180.0) / Math.pow(2.0, currentZoom)
+            val pixelRadius = radius / metersPerPixel
+            
+            // Update circle layer radius
+            style.removeStyleLayer(USER_CIRCLE_LAYER_ID)
+            style.addLayerAt(
+                circleLayer(USER_CIRCLE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
+                    circleRadius(pixelRadius)
+                    circleColor("#00E5FF")
+                    circleOpacity(0.3)
+                    circleStrokeColor("#00E5FF")
+                    circleStrokeWidth(2.0)
+                    circlePitchAlignment(CirclePitchAlignment.MAP)
+                },
+                null // Add at bottom layer
+            )
         }
     }
     
