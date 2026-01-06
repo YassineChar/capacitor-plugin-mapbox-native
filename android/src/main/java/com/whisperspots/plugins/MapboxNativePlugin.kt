@@ -184,16 +184,19 @@ class MapboxNativePlugin : Plugin() {
                     val centerLon = call.getDouble("centerLon") ?: 0.0
                     val zoom = call.getDouble("zoom") ?: 14.0
                     
-                    if (centerLat != 0.0 && centerLon != 0.0) {
-                        val cameraOptions = CameraOptions.Builder()
-                            .center(Point.fromLngLat(centerLon, centerLat))
-                            .zoom(zoom)
-                            .build()
-                        mapboxMap?.setCamera(cameraOptions)
-                        android.util.Log.i("MapboxNativePlugin", "📍 Centered on provided coords: $centerLat, $centerLon")
-                    } else {
-                        android.util.Log.w("MapboxNativePlugin", "⚠️ No coords provided, using Mapbox default")
+                    // wait for GPS
+                    if (centerLat == 0.0 || centerLon == 0.0) {
+                        android.util.Log.e("MapboxNativePlugin", "❌ INVALID COORDS [0,0] - TypeScript failed to wait for GPS!")
+                        call.reject("Invalid coordinates: centerLat=$centerLat, centerLon=$centerLon")
+                        return@OnStyleLoaded
                     }
+                    
+                    val cameraOptions = CameraOptions.Builder()
+                        .center(Point.fromLngLat(centerLon, centerLat))
+                        .zoom(zoom)
+                        .build()
+                    mapboxMap?.setCamera(cameraOptions)
+                    android.util.Log.i("MapboxNativePlugin", "📍 Centered map on REAL user coords: lat=$centerLat, lon=$centerLon, zoom=$zoom")
                     
                     setupMapListeners()
                     
@@ -1178,6 +1181,34 @@ class MapboxNativePlugin : Plugin() {
         // Polygon richiede che primo e ultimo punto coincidano (closed loop)
         // fromLngLats gestisce automaticamente la chiusura
         return Polygon.fromLngLats(listOf(coords))
+    }
+    
+    // Public methods for native access (used by WhisperHomeUIManager)
+    
+    data class LocationData(val latitude: Double, val longitude: Double)
+    
+    fun getLastKnownLocation(): LocationData? {
+        return userLocation?.let { point ->
+            LocationData(latitude = point.latitude(), longitude = point.longitude())
+        }
+    }
+    
+    fun setCenterAndZoom(latitude: Double, longitude: Double, zoom: Double, animated: Boolean = true) {
+        bridge.activity.runOnUiThread {
+            if (mapboxMap == null) {
+                android.util.Log.e("MapboxNativePlugin", "Cannot setCenterAndZoom: map not initialized")
+                return@runOnUiThread
+            }
+            
+            val cameraOptions = CameraOptions.Builder()
+                .center(Point.fromLngLat(longitude, latitude))
+                .zoom(zoom)
+                .build()
+            
+            mapboxMap?.setCamera(cameraOptions)
+            
+            android.util.Log.i("MapboxNativePlugin", "Camera set to lat=$latitude, lon=$longitude, zoom=$zoom, animated=$animated")
+        }
     }
     
     override fun handleOnDestroy() {
