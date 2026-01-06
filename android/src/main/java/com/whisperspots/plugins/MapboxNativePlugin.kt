@@ -17,6 +17,7 @@ import com.mapbox.geojson.Point
 import com.mapbox.maps.*
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.generated.circleLayer
+import com.mapbox.maps.extension.style.layers.properties.generated.CirclePitchAlignment
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.plugin.annotation.AnnotationPlugin
@@ -500,7 +501,7 @@ class MapboxNativePlugin : Plugin() {
                             circleOpacity(0.3) // 30% opacity fill
                             circleStrokeColor("#00E5FF") // Cyan stroke
                             circleStrokeWidth(2.0) // 2px stroke
-                            circlePitchAlignment("map") // Align to map for proper scaling
+                            circlePitchAlignment(CirclePitchAlignment.MAP) // Align to map for proper scaling
                         }
                     )
                     
