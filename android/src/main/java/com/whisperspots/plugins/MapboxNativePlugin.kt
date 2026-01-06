@@ -46,8 +46,11 @@ class MapboxNativePlugin : Plugin() {
     private var mockUserAnnotation: PointAnnotation? = null
     private var isMockModeActive = false
     
+    //GeoJSON source + layer for fixed-size circle
+    private val USER_CIRCLE_SOURCE_ID = "user-circle-source"
+    private val USER_CIRCLE_LAYER_ID = "user-circle-layer"
     private var currentUserRadius: Double? = null
-    private var autoSyncEnabled = false
+    private var currentUserCircleCenter: Point? = null
     
     private var mapTopOffset: Float = 0f
     private var mapHeightOffset: Float = 0f
@@ -450,7 +453,7 @@ class MapboxNativePlugin : Plugin() {
     @PluginMethod
     fun addCircle(call: PluginCall) {
         bridge.activity.runOnUiThread {
-            if (circleAnnotationManager == null) {
+            if (mapboxMap == null) {
                 call.reject("Map is not initialized")
                 return@runOnUiThread
             }
@@ -464,38 +467,80 @@ class MapboxNativePlugin : Plugin() {
                 return@runOnUiThread
             }
             
-            circleAnnotationManager?.deleteAll()
-            
-            // Use meter-based radius with proper pitch-alignment
-            // This makes the circle maintain size in meters regardless of zoom
-            val circleAnnotationOptions = CircleAnnotationOptions()
-                .withPoint(Point.fromLngLat(lon, lat))
-                .withCircleRadius(radius) // Use meters directly
-                .withCircleColor("#00E5FF")
-                .withCircleOpacity(0.3)
-                .withCircleStrokeColor("#00E5FF")
-                .withCircleStrokeWidth(2.0)
-                .withCircleRadiusUnit("meter") 
-                .withCirclePitchAlignment("map") 
-            
-            circleAnnotationManager?.create(circleAnnotationOptions)
-            
-            currentUserRadius = radius
-            autoSyncEnabled = true
-            
-            call.resolve(JSObject().put("status", "success").put("circleId", "user-circle"))
+            try {
+                val center = Point.fromLngLat(lon, lat)
+                currentUserCircleCenter = center
+                currentUserRadius = radius
+                
+                mapboxMap?.getStyle { style ->
+                    // Remove existing circle if present
+                    if (style.styleLayerExists(USER_CIRCLE_LAYER_ID)) {
+                        style.removeStyleLayer(USER_CIRCLE_LAYER_ID)
+                    }
+                    if (style.styleSourceExists(USER_CIRCLE_SOURCE_ID)) {
+                        style.removeStyleSource(USER_CIRCLE_SOURCE_ID)
+                    }
+                    
+                    // Create GeoJSON feature with circle center point
+                    val circleFeature = Feature.fromGeometry(center)
+                    val featureCollection = FeatureCollection.fromFeatures(listOf(circleFeature))
+                    
+                    // Add GeoJSON source
+                    style.addSource(
+                        geoJsonSource(USER_CIRCLE_SOURCE_ID) {
+                            featureCollection(featureCollection)
+                        }
+                    )
+                    
+                    // Add circle layer with METER-based radius
+                    style.addLayer(
+                        circleLayer(USER_CIRCLE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
+                            circleRadius(radius) // Radius in METERS
+                            circleColor("#00E5FF") // Cyan color
+                            circleOpacity(0.3) // 30% opacity fill
+                            circleStrokeColor("#00E5FF") // Cyan stroke
+                            circleStrokeWidth(2.0) // 2px stroke
+                            circlePitchAlignment("map") // Align to map for proper scaling
+                        }
+                    )
+                    
+                    call.resolve(JSObject().put("status", "success").put("circleId", "user-circle"))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MapboxNativePlugin", "❌ Error adding circle: ${e.message}", e)
+                call.reject("Failed to add circle: ${e.message}", e)
+            }
         }
     }
     
     @PluginMethod
     fun removeCircle(call: PluginCall) {
         bridge.activity.runOnUiThread {
-            circleAnnotationManager?.deleteAll()
+            if (mapboxMap == null) {
+                call.reject("Map is not initialized")
+                return@runOnUiThread
+            }
             
-            autoSyncEnabled = false
-            currentUserRadius = null
-            
-            call.resolve(JSObject().put("status", "success"))
+            try {
+                mapboxMap?.getStyle { style ->
+                    // Remove GeoJSON circle layer and source
+                    if (style.styleLayerExists(USER_CIRCLE_LAYER_ID)) {
+                        style.removeStyleLayer(USER_CIRCLE_LAYER_ID)
+                    }
+                    if (style.styleSourceExists(USER_CIRCLE_SOURCE_ID)) {
+                        style.removeStyleSource(USER_CIRCLE_SOURCE_ID)
+                    }
+                    
+                    currentUserRadius = null
+                    currentUserCircleCenter = null
+                    
+                    android.util.Log.i("MapboxNativePlugin", "✅ PRO Circle removed")
+                    call.resolve(JSObject().put("status", "success"))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MapboxNativePlugin", "❌ Error removing circle: ${e.message}", e)
+                call.reject("Failed to remove circle: ${e.message}", e)
+            }
         }
     }
     
@@ -606,10 +651,11 @@ class MapboxNativePlugin : Plugin() {
             val currentZoom = mapboxMap?.cameraState?.zoom ?: 0.0
             val zoomDelta = kotlin.math.abs(currentZoom - lastClusteredZoomLevel)
             
+            // Re-cluster whispers on significant zoom change
             if (zoomDelta >= 1.0 && lastClusteredZoomLevel > 0.0) {
                 reclusterWhispers()
             }
-            
+        
             lastZoom = currentZoom
         }
     }
@@ -928,13 +974,8 @@ class MapboxNativePlugin : Plugin() {
         return results[0].toDouble()
     }
     
-    private fun radiusMetersToPixels(meters: Double): Double {
-        // NOTE: This function is deprecated with new meter-based circle rendering
-        // Kept for backwards compatibility but not used with CircleRadiusUnit.METER
-        // If somehow called, use simple fallback conversion
-        val metersPerPixel = 156543.03392 * Math.cos(0.0 * Math.PI / 180) / 2.0.pow(mapboxMap?.cameraState?.zoom ?: 14.0)
-        return meters / metersPerPixel
-    }
+    // PRO: radiusMetersToPixels() removed - obsolete with GeoJSON CircleLayer approach
+    // GeoJSON circles use meter-based radius natively (circleRadius property in meters)
     
     data class WhisperAnnotationData(
         val whisperId: String,
@@ -981,9 +1022,7 @@ class MapboxNativePlugin : Plugin() {
         gradientView.visibility = View.GONE
         
         rootView.addView(gradientView)
-        this.statusBarGradientView = gradientView
-        
-        android.util.Log.i("MapboxNativePlugin", "✅ Status bar gradient created (height: ${statusBarHeight}px)")
+        this.statusBarGradientView = gradientView        
     }
     
     private fun getStatusBarHeight(activity: android.app.Activity): Int {
