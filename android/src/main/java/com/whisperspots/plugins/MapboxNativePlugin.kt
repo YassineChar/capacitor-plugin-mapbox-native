@@ -15,6 +15,9 @@ import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
 import com.mapbox.maps.*
+import com.mapbox.maps.extension.style.expressions.dsl.generated.interpolate
+import com.mapbox.maps.extension.style.expressions.dsl.generated.linear
+import com.mapbox.maps.extension.style.expressions.dsl.generated.zoom
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.generated.circleLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.CirclePitchAlignment
@@ -144,6 +147,12 @@ class MapboxNativePlugin : Plugin() {
                     val annotationApi = mapView.annotations
                     pointAnnotationManager = annotationApi.createPointAnnotationManager()
                     circleAnnotationManager = annotationApi.createCircleAnnotationManager()
+                    
+                    // Disable Mapbox logo and attribution
+                    // mapView.logo.enabled = false
+                    mapView.attribution.enabled = false
+                    // mapView.compass.enabled = false
+                    mapView.scalebar.enabled = false
                     
                     mapView.location.updateSettings {
                         enabled = true
@@ -493,15 +502,38 @@ class MapboxNativePlugin : Plugin() {
                         }
                     )
                     
-                    // Add circle layer with METER-based radius
+                    // Add circle layer with FIXED radius in meters (iOS-like behavior)
+                    // Mapbox circleRadius is in pixels, so we use zoom interpolation
+                    // Formula: metersPerPixel = 156543.03392 * cos(lat) / 2^zoom
+                    // Inverted: pixelRadius = meters / metersPerPixel
+                    val latitude = center.latitude()
+                    
+                    // Calculate pixel radius for different zoom levels to maintain fixed meter radius
+                    // We need to create an interpolation expression that adjusts pixels as zoom changes
+                    val metersPerPixelAtZoom = { zoomLevel: Double ->
+                        156543.03392 * Math.cos(latitude * Math.PI / 180.0) / Math.pow(2.0, zoomLevel)
+                    }
+                    
+                    // Create zoom stops for smooth scaling (zoom 0 to 22)
+                    val radiusExpression = interpolate {
+                        linear()
+                        zoom()
+                        stop(0.0) { literal(radius / metersPerPixelAtZoom(0.0)) }
+                        stop(5.0) { literal(radius / metersPerPixelAtZoom(5.0)) }
+                        stop(10.0) { literal(radius / metersPerPixelAtZoom(10.0)) }
+                        stop(15.0) { literal(radius / metersPerPixelAtZoom(15.0)) }
+                        stop(20.0) { literal(radius / metersPerPixelAtZoom(20.0)) }
+                        stop(22.0) { literal(radius / metersPerPixelAtZoom(22.0)) }
+                    }
+                    
                     style.addLayer(
                         circleLayer(USER_CIRCLE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
-                            circleRadius(radius) // Radius in METERS
-                            circleColor("#00E5FF") // Cyan color
-                            circleOpacity(0.3) // 30% opacity fill
-                            circleStrokeColor("#00E5FF") // Cyan stroke
-                            circleStrokeWidth(2.0) // 2px stroke
-                            circlePitchAlignment(CirclePitchAlignment.MAP) // Align to map for proper scaling
+                            circleRadius(radiusExpression) // Dynamic pixel radius based on zoom
+                            circleColor("#00E5FF")
+                            circleOpacity(0.3)
+                            circleStrokeColor("#00E5FF")
+                            circleStrokeWidth(2.0)
+                            circlePitchAlignment(CirclePitchAlignment.MAP)
                         }
                     )
                     
