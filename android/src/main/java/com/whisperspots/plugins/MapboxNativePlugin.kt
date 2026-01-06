@@ -70,6 +70,11 @@ class MapboxNativePlugin : Plugin() {
     private var clusteringThreshold: Double = 50.0
     private var lastClusteredZoomLevel: Double = 0.0
     
+    // Recenter button visibility management
+    private var userLocation: Point? = null
+    private val RECENTER_SHOW_THRESHOLD = 100.0 // meters - show button if map center > 100m from user
+    private val RECENTER_HIDE_THRESHOLD = 50.0  // meters - hide button if map center < 50m from user
+    
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     
     @PluginMethod
@@ -638,6 +643,12 @@ class MapboxNativePlugin : Plugin() {
     
     @SuppressLint("ClickableViewAccessibility")
     private fun setupMapListeners() {
+        // Track user location updates for recenter button logic
+        mapView?.location?.addOnIndicatorPositionChangedListener { point ->
+            userLocation = point
+            android.util.Log.d("MapboxNativePlugin", "📍 User location updated: ${point.latitude()}, ${point.longitude()}")
+        }
+        
         mapView?.mapboxMap?.addOnMapClickListener(OnMapClickListener { point ->
             mapView?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             
@@ -692,11 +703,47 @@ class MapboxNativePlugin : Plugin() {
                 reclusterWhispers()
             }
             
+            // RECENTER BUTTON LOGIC 
+            // Calculate distance between map center and user location
+            // Show button if > 100m, hide if < 50m (hysteresis prevents flickering)
+            checkRecenterButtonVisibility()
+            
             // Polygon approach doesn't need recalculation - Mapbox handles world-space rendering
             // Circle stays FIXED at radius meters, just like iOS MKCircle
         
             lastZoom = currentZoom
         }
+    }
+    
+    /**
+     * Check if recenter button should be shown/hidden based on distance
+     * between map center and user location.
+     * 
+     * Shows button if distance > 100m, hides if < 50m.
+     * Hysteresis (50-100m gap) prevents flickering when user is near threshold.
+     */
+    private fun checkRecenterButtonVisibility() {
+        val userLoc = userLocation ?: return
+        val mapCenter = mapboxMap?.cameraState?.center ?: return
+        
+        // Calculate distance between map center and user position
+        val results = FloatArray(1)
+        Location.distanceBetween(
+            userLoc.latitude(), userLoc.longitude(),
+            mapCenter.latitude(), mapCenter.longitude(),
+            results
+        )
+        val distance = results[0].toDouble()
+        
+        // iOS match: show threshold 100m, hide threshold 50m
+        if (distance > RECENTER_SHOW_THRESHOLD) {
+            android.util.Log.d("MapboxNativePlugin", "🎯 Distance ${distance.toInt()}m > ${RECENTER_SHOW_THRESHOLD.toInt()}m → SHOW recenter button")
+            notifyListeners("showRecenterButton", JSObject())
+        } else if (distance < RECENTER_HIDE_THRESHOLD) {
+            android.util.Log.d("MapboxNativePlugin", "🙈 Distance ${distance.toInt()}m < ${RECENTER_HIDE_THRESHOLD.toInt()}m → HIDE recenter button")
+            notifyListeners("hideRecenterButton", JSObject())
+        }
+        // Between 50-100m: do nothing (hysteresis zone)
     }
     
     private fun clusterNearbyWhispers(whispers: List<WhisperAnnotationData>): List<ClusterAnnotationData> {
