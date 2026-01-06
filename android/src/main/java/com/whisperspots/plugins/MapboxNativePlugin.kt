@@ -31,6 +31,9 @@ import com.mapbox.maps.plugin.annotation.generated.*
 import com.mapbox.maps.plugin.gestures.OnMapClickListener
 import com.mapbox.maps.plugin.gestures.addOnMapClickListener
 import com.mapbox.maps.plugin.locationcomponent.location
+import com.mapbox.maps.plugin.scalebar.scalebar
+import com.mapbox.maps.plugin.compass.compass
+import com.mapbox.maps.plugin.attribution.attribution
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.net.URL
