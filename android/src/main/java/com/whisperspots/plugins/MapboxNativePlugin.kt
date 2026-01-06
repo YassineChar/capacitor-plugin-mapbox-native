@@ -17,10 +17,12 @@ import com.mapbox.geojson.Point
 import com.mapbox.geojson.Polygon
 import com.mapbox.maps.*
 import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.addLayerAt
 import com.mapbox.maps.extension.style.layers.generated.circleLayer
 import com.mapbox.maps.extension.style.layers.generated.fillLayer
 import com.mapbox.maps.extension.style.layers.generated.lineLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.CirclePitchAlignment
+import com.mapbox.maps.LayerPosition
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.plugin.annotation.AnnotationPlugin
@@ -499,23 +501,28 @@ class MapboxNativePlugin : Plugin() {
                         }
                     )
                     
-                    // Add fill layer (area interna)
-                    style.addLayer(
+                    // Add fill+stroke layers BELOW symbols
+                    // LayerPosition(0) mette i layer in fondo allo stack (sotto whispers e user position)
+                    
+                    // Add fill layer (area interna) - BELOW everything
+                    style.addLayerAt(
                         fillLayer(USER_CIRCLE_FILL_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
                             fillColor("#00E5FF")
                             fillOpacity(0.25)
-                        }
+                        },
+                        LayerPosition(null, null, 0) // Position 0 = in fondo allo stack
                     )
                     
-                    // Add stroke layer (bordo)
-                    style.addLayer(
+                    // Add stroke layer (bordo) - ABOVE fill but BELOW symbols
+                    style.addLayerAt(
                         lineLayer(USER_CIRCLE_STROKE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
                             lineColor("#00E5FF")
                             lineWidth(2.0)
-                        }
+                        },
+                        LayerPosition(null, null, 1) // Position 1 = sopra fill, sotto symbols
                     )
                     
-                    android.util.Log.i("MapboxNativePlugin", "✅ Circle polygon added: radius=${radius}m (world-space, no pixel conversion!)")
+                    android.util.Log.i("MapboxNativePlugin", "✅ Circle polygon added BELOW symbols: radius=${radius}m (world-space)")
                     call.resolve(JSObject().put("status", "success").put("circleId", "user-circle"))
                 }
             } catch (e: Exception) {
