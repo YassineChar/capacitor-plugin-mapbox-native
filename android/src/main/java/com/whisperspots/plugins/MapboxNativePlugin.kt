@@ -441,12 +441,21 @@ class MapboxNativePlugin : Plugin() {
                 return@runOnUiThread
             }
             
+            android.util.Log.i("MapboxNativePlugin", "🎯 setCenterAndZoom CALLED:")
+            android.util.Log.i("MapboxNativePlugin", "   Target: lat=$latitude, lon=$longitude, zoom=$zoom")
+            android.util.Log.i("MapboxNativePlugin", "   Animated: $animated")
+            
+            val currentCenter = mapboxMap?.cameraState?.center
+            android.util.Log.i("MapboxNativePlugin", "   Current center: lat=${currentCenter?.latitude()}, lon=${currentCenter?.longitude()}")
+            
             val cameraOptions = CameraOptions.Builder()
                 .center(Point.fromLngLat(longitude, latitude))
                 .zoom(zoom)
                 .build()
             
             mapboxMap?.setCamera(cameraOptions)
+            
+            android.util.Log.i("MapboxNativePlugin", "✅ Camera moved to target position")
             
             call.resolve(JSObject().put("status", "success"))
         }
