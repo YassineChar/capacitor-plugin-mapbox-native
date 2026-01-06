@@ -14,9 +14,12 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
+import com.mapbox.geojson.Polygon
 import com.mapbox.maps.*
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.generated.circleLayer
+import com.mapbox.maps.extension.style.layers.generated.fillLayer
+import com.mapbox.maps.extension.style.layers.generated.lineLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.CirclePitchAlignment
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
@@ -47,9 +50,11 @@ class MapboxNativePlugin : Plugin() {
     private var mockUserAnnotation: PointAnnotation? = null
     private var isMockModeActive = false
     
-    //GeoJSON source + layer for fixed-size circle
+    // GeoJSON Polygon approach per cerchio in world-space (come iOS MKCircle)
+    // Non usa pixel radius, ma coordinate geografiche reali
     private val USER_CIRCLE_SOURCE_ID = "user-circle-source"
-    private val USER_CIRCLE_LAYER_ID = "user-circle-layer"
+    private val USER_CIRCLE_FILL_LAYER_ID = "user-circle-fill"
+    private val USER_CIRCLE_STROKE_LAYER_ID = "user-circle-stroke"
     private var currentUserRadius: Double? = null
     private var currentUserCircleCenter: Point? = null
     
@@ -474,43 +479,43 @@ class MapboxNativePlugin : Plugin() {
                 currentUserRadius = radius
                 
                 mapboxMap?.getStyle { style ->
-                    // Remove existing circle if present
-                    if (style.styleLayerExists(USER_CIRCLE_LAYER_ID)) {
-                        style.removeStyleLayer(USER_CIRCLE_LAYER_ID)
+                    // Remove existing circle layers if present
+                    if (style.styleLayerExists(USER_CIRCLE_STROKE_LAYER_ID)) {
+                        style.removeStyleLayer(USER_CIRCLE_STROKE_LAYER_ID)
+                    }
+                    if (style.styleLayerExists(USER_CIRCLE_FILL_LAYER_ID)) {
+                        style.removeStyleLayer(USER_CIRCLE_FILL_LAYER_ID)
                     }
                     if (style.styleSourceExists(USER_CIRCLE_SOURCE_ID)) {
                         style.removeStyleSource(USER_CIRCLE_SOURCE_ID)
                     }
                     
-                    // Create GeoJSON feature with circle center point
-                    val circleFeature = Feature.fromGeometry(center)
-                    val featureCollection = FeatureCollection.fromFeatures(listOf(circleFeature))
+                    val circlePolygon = createCirclePolygon(center, radius, steps = 64)
                     
-                    // Add GeoJSON source
+                    // Add GeoJSON source with polygon geometry
                     style.addSource(
                         geoJsonSource(USER_CIRCLE_SOURCE_ID) {
-                            featureCollection(featureCollection)
+                            geometry(circlePolygon)
                         }
                     )
                     
-                    // Calculate current pixel radius from meters
-                    // iOS MKCircle equivalent: radius is in METERS, we convert to pixels for current zoom
-                    val currentZoom = mapboxMap?.cameraState?.zoom ?: 14.0
-                    val metersPerPixel = 156543.03392 * Math.cos(lat * Math.PI / 180.0) / Math.pow(2.0, currentZoom)
-                    val pixelRadius = radius / metersPerPixel
-                    
+                    // Add fill layer (area interna)
                     style.addLayer(
-                        circleLayer(USER_CIRCLE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
-                            circleRadius(pixelRadius)
-                            circleColor("#00E5FF")
-                            circleOpacity(0.3)
-                            circleStrokeColor("#00E5FF")
-                            circleStrokeWidth(2.0)
-                            circlePitchAlignment(CirclePitchAlignment.MAP)
+                        fillLayer(USER_CIRCLE_FILL_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
+                            fillColor("#00E5FF")
+                            fillOpacity(0.25)
                         }
                     )
                     
-                    android.util.Log.i("MapboxNativePlugin", "✅ Circle added: radius=${radius}m, pixels=$pixelRadius at zoom=$currentZoom")
+                    // Add stroke layer (bordo)
+                    style.addLayer(
+                        lineLayer(USER_CIRCLE_STROKE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
+                            lineColor("#00E5FF")
+                            lineWidth(2.0)
+                        }
+                    )
+                    
+                    android.util.Log.i("MapboxNativePlugin", "✅ Circle polygon added: radius=${radius}m (world-space, no pixel conversion!)")
                     call.resolve(JSObject().put("status", "success").put("circleId", "user-circle"))
                 }
             } catch (e: Exception) {
@@ -530,9 +535,12 @@ class MapboxNativePlugin : Plugin() {
             
             try {
                 mapboxMap?.getStyle { style ->
-                    // Remove GeoJSON circle layer and source
-                    if (style.styleLayerExists(USER_CIRCLE_LAYER_ID)) {
-                        style.removeStyleLayer(USER_CIRCLE_LAYER_ID)
+                    // Remove polygon circle layers and source
+                    if (style.styleLayerExists(USER_CIRCLE_STROKE_LAYER_ID)) {
+                        style.removeStyleLayer(USER_CIRCLE_STROKE_LAYER_ID)
+                    }
+                    if (style.styleLayerExists(USER_CIRCLE_FILL_LAYER_ID)) {
+                        style.removeStyleLayer(USER_CIRCLE_FILL_LAYER_ID)
                     }
                     if (style.styleSourceExists(USER_CIRCLE_SOURCE_ID)) {
                         style.removeStyleSource(USER_CIRCLE_SOURCE_ID)
@@ -541,7 +549,7 @@ class MapboxNativePlugin : Plugin() {
                     currentUserRadius = null
                     currentUserCircleCenter = null
                     
-                    android.util.Log.i("MapboxNativePlugin", "✅ PRO Circle removed")
+                    android.util.Log.i("MapboxNativePlugin", "✅ Circle polygon removed")
                     call.resolve(JSObject().put("status", "success"))
                 }
             } catch (e: Exception) {
@@ -663,43 +671,10 @@ class MapboxNativePlugin : Plugin() {
                 reclusterWhispers()
             }
             
-            // iOS MKCircle equivalent: update circle pixel radius on ANY camera change
-            // This keeps the circle at fixed METERS size (like iOS)
-            if (currentUserRadius != null && currentUserCircleCenter != null) {
-                updateCircleRadiusForCurrentZoom()
-            }
+            // Polygon approach doesn't need recalculation - Mapbox handles world-space rendering
+            // Circle stays FIXED at radius meters, just like iOS MKCircle
         
             lastZoom = currentZoom
-        }
-    }
-    
-    // iOS MKCircle equivalent: recalculate pixel radius to maintain fixed meters
-    private fun updateCircleRadiusForCurrentZoom() {
-        val radius = currentUserRadius ?: return
-        val center = currentUserCircleCenter ?: return
-        
-        mapboxMap?.getStyle { style ->
-            if (!style.styleLayerExists(USER_CIRCLE_LAYER_ID)) return@getStyle
-            
-            val currentZoom = mapboxMap?.cameraState?.zoom ?: 14.0
-            val latitude = center.latitude()
-            
-            // Calculate meters per pixel at current zoom and latitude
-            val metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180.0) / Math.pow(2.0, currentZoom)
-            val pixelRadius = radius / metersPerPixel
-            
-            // Update circle layer radius (remove and re-add to update properties)
-            style.removeStyleLayer(USER_CIRCLE_LAYER_ID)
-            style.addLayer(
-                circleLayer(USER_CIRCLE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
-                    circleRadius(pixelRadius)
-                    circleColor("#00E5FF")
-                    circleOpacity(0.3)
-                    circleStrokeColor("#00E5FF")
-                    circleStrokeWidth(2.0)
-                    circlePitchAlignment(CirclePitchAlignment.MAP)
-                }
-            )
         }
     }
     
@@ -1075,6 +1050,57 @@ class MapboxNativePlugin : Plugin() {
             result = activity.resources.getDimensionPixelSize(resourceId)
         }
         return result
+    }
+    
+    /**
+     * 
+     * Genera un Polygon con punti a distanza costante dal centro (in metri).
+     * 
+     * Il cerchio risultante:
+     * - È in coordinate geografiche (lat/lng), non pixel
+     * - Resta FERMO durante zoom/unzoom
+     * - Rappresenta una distanza reale in metri
+     * - Viene renderizzato da Mapbox in world-space
+     * 
+     * @param center Centro del cerchio (Point lat/lng)
+     * @param radiusMeters Raggio in metri (es. 40000 per 40km)
+     * @param steps Numero di punti per approssimare il cerchio (default 64, più alto = più smooth)
+     * @return Polygon geografico pronto per GeoJSON source
+     */
+    private fun createCirclePolygon(
+        center: Point,
+        radiusMeters: Double,
+        steps: Int = 64
+    ): Polygon {
+        val coords = mutableListOf<Point>()
+        val lat = Math.toRadians(center.latitude())
+        val lon = Math.toRadians(center.longitude())
+        val earthRadius = 6378137.0 // Raggio Terra in metri (WGS84)
+
+        // Genera punti equidistanti lungo la circonferenza
+        for (i in 0..steps) {
+            val angle = 2.0 * Math.PI * i / steps
+            
+            // Calcola offset in metri usando proiezione equirettangolare
+            // (sufficiente per raggi < 1000km, precisa per 40km)
+            val dx = radiusMeters * Math.cos(angle)
+            val dy = radiusMeters * Math.sin(angle)
+
+            // Converti offset metri → radianti → gradi
+            val newLat = lat + dy / earthRadius
+            val newLon = lon + dx / (earthRadius * Math.cos(lat))
+
+            coords.add(
+                Point.fromLngLat(
+                    Math.toDegrees(newLon),
+                    Math.toDegrees(newLat)
+                )
+            )
+        }
+
+        // Polygon richiede che primo e ultimo punto coincidano (closed loop)
+        // fromLngLats gestisce automaticamente la chiusura
+        return Polygon.fromLngLats(listOf(coords))
     }
     
     override fun handleOnDestroy() {
