@@ -502,7 +502,7 @@ class MapboxNativePlugin : Plugin() {
                     )
                     
                     // Add fill+stroke layers BELOW symbols
-                    // LayerPosition(0) mette i layer in fondo allo stack (sotto whispers e user position)
+                    // LayerPosition.at(index) posiziona i layer in fondo allo stack (sotto whispers e user position)
                     
                     // Add fill layer (area interna) - BELOW everything
                     style.addLayerAt(
@@ -510,7 +510,7 @@ class MapboxNativePlugin : Plugin() {
                             fillColor("#00E5FF")
                             fillOpacity(0.25)
                         },
-                        LayerPosition(null, null, 0) // Position 0 = in fondo allo stack
+                        LayerPosition.at(0)
                     )
                     
                     // Add stroke layer (bordo) - ABOVE fill but BELOW symbols
@@ -519,7 +519,7 @@ class MapboxNativePlugin : Plugin() {
                             lineColor("#00E5FF")
                             lineWidth(2.0)
                         },
-                        LayerPosition(null, null, 1) // Position 1 = sopra fill, sotto symbols
+                        LayerPosition.at(1)
                     )
                     
                     android.util.Log.i("MapboxNativePlugin", "✅ Circle polygon added BELOW symbols: radius=${radius}m (world-space)")
