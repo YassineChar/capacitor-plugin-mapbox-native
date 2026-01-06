@@ -42,4 +42,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation project(':capacitor-android')
     implementation 'com.mapbox.maps:android:11.0.0'
+    
+    // Google Play Services Location (for FusedLocationProviderClient - native OS location cache)
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
 }
