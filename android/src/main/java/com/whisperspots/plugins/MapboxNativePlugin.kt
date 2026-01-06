@@ -11,6 +11,8 @@ import android.view.View
 import android.widget.FrameLayout
 import com.getcapacitor.*
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
