@@ -184,25 +184,25 @@ class MapboxNativePlugin : Plugin() {
                     val centerLon = call.getDouble("centerLon") ?: 0.0
                     val zoom = call.getDouble("zoom") ?: 14.0
                     
-                    // wait for GPS
+                    // Validate GPS coordinates - reject [0,0] (Somalia spawn)
                     if (centerLat == 0.0 || centerLon == 0.0) {
                         android.util.Log.e("MapboxNativePlugin", "❌ INVALID COORDS [0,0] - TypeScript failed to wait for GPS!")
                         call.reject("Invalid coordinates: centerLat=$centerLat, centerLon=$centerLon")
-                        return@OnStyleLoaded
+                    } else {
+                        // Valid coordinates - initialize map
+                        val cameraOptions = CameraOptions.Builder()
+                            .center(Point.fromLngLat(centerLon, centerLat))
+                            .zoom(zoom)
+                            .build()
+                        mapboxMap?.setCamera(cameraOptions)
+                        android.util.Log.i("MapboxNativePlugin", "📍 Centered map on REAL user coords: lat=$centerLat, lon=$centerLon, zoom=$zoom")
+                        
+                        setupMapListeners()
+                        
+                        android.util.Log.i("MapboxNativePlugin", "✅ Style loaded, map fully ready")
+                        
+                        call.resolve(JSObject().put("status", "success"))
                     }
-                    
-                    val cameraOptions = CameraOptions.Builder()
-                        .center(Point.fromLngLat(centerLon, centerLat))
-                        .zoom(zoom)
-                        .build()
-                    mapboxMap?.setCamera(cameraOptions)
-                    android.util.Log.i("MapboxNativePlugin", "📍 Centered map on REAL user coords: lat=$centerLat, lon=$centerLon, zoom=$zoom")
-                    
-                    setupMapListeners()
-                    
-                    android.util.Log.i("MapboxNativePlugin", "✅ Style loaded, map fully ready")
-                    
-                    call.resolve(JSObject().put("status", "success"))
                 }
                 
             } catch (e: Exception) {
