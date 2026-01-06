@@ -84,6 +84,58 @@ class MapboxNativePlugin : Plugin() {
         val value = call.getString("value") ?: ""
         call.resolve(JSObject().put("value", value))
     }
+
+    /**
+     * Get last known location from Android OS cache (FusedLocationProviderClient)
+     * 
+     * Instagram/Snapchat-match: Uses native OS location cache shared across ALL apps.
+     * Returns INSTANTLY (0ms) if cache available.
+     * 
+     * Cache persists even if app was completely closed, as long as:
+     * - Device not rebooted
+     * - Location services enabled
+     * - Cache not older than ~1 hour (OS manages expiration)
+     * 
+     * @return Location from OS cache or error if cache empty
+     */
+    @SuppressLint("MissingPermission")
+    @PluginMethod
+    fun getLastKnownLocation(call: PluginCall) {
+        val fusedLocationClient: FusedLocationProviderClient = 
+            LocationServices.getFusedLocationProviderClient(bridge.activity)
+        
+        android.util.Log.i("MapboxNativePlugin", "📍 Requesting NATIVE OS location cache (FusedLocationProvider)...")
+        
+        fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+            if (location != null) {
+                val age = System.currentTimeMillis() - location.time
+                android.util.Log.i("MapboxNativePlugin", "✅ NATIVE cache HIT:")
+                android.util.Log.i("MapboxNativePlugin", "   Location: lat=${location.latitude}, lon=${location.longitude}")
+                android.util.Log.i("MapboxNativePlugin", "   Accuracy: ${location.accuracy}m")
+                android.util.Log.i("MapboxNativePlugin", "   Age: ${age}ms (${age/1000}s)")
+                android.util.Log.i("MapboxNativePlugin", "   Provider: ${location.provider}")
+                
+                call.resolve(JSObject().apply {
+                    put("latitude", location.latitude)
+                    put("longitude", location.longitude)
+                    put("accuracy", location.accuracy.toDouble())
+                    put("age", age)
+                    put("provider", location.provider ?: "unknown")
+                    put("source", "native-os-cache")
+                })
+            } else {
+                android.util.Log.w("MapboxNativePlugin", "⚠️ NATIVE cache MISS - no last known location available")
+                android.util.Log.w("MapboxNativePlugin", "   Possible reasons:")
+                android.util.Log.w("MapboxNativePlugin", "   - Device just rebooted")
+                android.util.Log.w("MapboxNativePlugin", "   - No app has requested location recently")
+                android.util.Log.w("MapboxNativePlugin", "   - Location services disabled")
+                call.reject("NO_CACHE_AVAILABLE", "No last known location in OS cache")
+            }
+        }.addOnFailureListener { exception ->
+            android.util.Log.e("MapboxNativePlugin", "❌ Error accessing native location cache: ${exception.message}")
+            call.reject("LOCATION_ERROR", "Failed to access location cache: ${exception.message}")
+        }
+    }
     
     @PluginMethod
     fun initMapbox(call: PluginCall) {
