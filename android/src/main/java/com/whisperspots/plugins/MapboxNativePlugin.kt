@@ -466,13 +466,17 @@ class MapboxNativePlugin : Plugin() {
             
             circleAnnotationManager?.deleteAll()
             
+            // Use meter-based radius with proper pitch-alignment
+            // This makes the circle maintain size in meters regardless of zoom
             val circleAnnotationOptions = CircleAnnotationOptions()
                 .withPoint(Point.fromLngLat(lon, lat))
-                .withCircleRadius(radiusMetersToPixels(radius))
+                .withCircleRadius(radius) // Use meters directly
                 .withCircleColor("#00E5FF")
                 .withCircleOpacity(0.3)
                 .withCircleStrokeColor("#00E5FF")
                 .withCircleStrokeWidth(2.0)
+                .withCircleRadiusUnit("meter") 
+                .withCirclePitchAlignment("map") 
             
             circleAnnotationManager?.create(circleAnnotationOptions)
             
@@ -925,6 +929,9 @@ class MapboxNativePlugin : Plugin() {
     }
     
     private fun radiusMetersToPixels(meters: Double): Double {
+        // NOTE: This function is deprecated with new meter-based circle rendering
+        // Kept for backwards compatibility but not used with CircleRadiusUnit.METER
+        // If somehow called, use simple fallback conversion
         val metersPerPixel = 156543.03392 * Math.cos(0.0 * Math.PI / 180) / 2.0.pow(mapboxMap?.cameraState?.zoom ?: 14.0)
         return meters / metersPerPixel
     }
