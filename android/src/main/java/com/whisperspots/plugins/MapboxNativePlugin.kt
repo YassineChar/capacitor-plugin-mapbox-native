@@ -145,9 +145,6 @@ class MapboxNativePlugin : Plugin() {
                     pointAnnotationManager = annotationApi.createPointAnnotationManager()
                     circleAnnotationManager = annotationApi.createCircleAnnotationManager()
                     
-                    // Disable Mapbox branding UI elements
-                    mapView.attribution.enabled = false
-                    
                     mapView.location.updateSettings {
                         enabled = true
                         pulsingEnabled = true
@@ -691,9 +688,9 @@ class MapboxNativePlugin : Plugin() {
             val metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180.0) / Math.pow(2.0, currentZoom)
             val pixelRadius = radius / metersPerPixel
             
-            // Update circle layer radius
+            // Update circle layer radius (remove and re-add to update properties)
             style.removeStyleLayer(USER_CIRCLE_LAYER_ID)
-            style.addLayerAt(
+            style.addLayer(
                 circleLayer(USER_CIRCLE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
                     circleRadius(pixelRadius)
                     circleColor("#00E5FF")
@@ -701,8 +698,7 @@ class MapboxNativePlugin : Plugin() {
                     circleStrokeColor("#00E5FF")
                     circleStrokeWidth(2.0)
                     circlePitchAlignment(CirclePitchAlignment.MAP)
-                },
-                null // Add at bottom layer
+                }
             )
         }
     }
