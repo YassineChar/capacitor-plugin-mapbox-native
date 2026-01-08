@@ -20,6 +20,8 @@ import com.mapbox.geojson.Polygon
 import com.mapbox.maps.*
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.addLayerAt
+import com.mapbox.maps.extension.style.layers.addLayerBelow
+import com.mapbox.maps.extension.style.layers.addLayerAbove
 import com.mapbox.maps.extension.style.layers.generated.circleLayer
 import com.mapbox.maps.extension.style.layers.generated.fillLayer
 import com.mapbox.maps.extension.style.layers.generated.lineLayer
@@ -431,7 +433,7 @@ class MapboxNativePlugin : Plugin() {
                     initials = if (point.has("initials")) point.getString("initials") else null,
                     avatarColor = if (point.has("avatarColor")) point.getString("avatarColor") else null,
                     expiryColor = if (point.has("expiryColor")) point.getString("expiryColor") else null,
-                    markerSize = if (point.has("markerSize")) point.getDouble("markerSize").toFloat() else 120f,
+                    markerSize = if (point.has("markerSize")) point.getDouble("markerSize").toFloat() else (80f * bridge.context.resources.displayMetrics.density),
                     opacity = if (point.has("opacity")) point.getDouble("opacity").toFloat() else 1.0f,
                     isClickable = if (point.has("isClickable")) point.getBoolean("isClickable") else true
                 )
@@ -584,33 +586,47 @@ class MapboxNativePlugin : Plugin() {
                     
                     val circlePolygon = createCirclePolygon(center, radius, steps = 64)
                     
-                    // Add GeoJSON source with polygon geometry
                     style.addSource(
                         geoJsonSource(USER_CIRCLE_SOURCE_ID) {
                             geometry(circlePolygon)
                         }
                     )
                     
-                    // Add fill+stroke layers BELOW symbols
-                    // addLayer() senza posizione aggiunge in fondo (sotto annotations)
+                    val belowLayerId = style.styleLayers.firstOrNull()?.id
                     
-                    // Add fill layer (area interna) - BELOW everything
-                    style.addLayer(
-                        fillLayer(USER_CIRCLE_FILL_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
-                            fillColor("#00E5FF")
-                            fillOpacity(0.25)
-                        }
-                    )
+                    if (belowLayerId != null) {
+                        style.addLayerBelow(
+                            fillLayer(USER_CIRCLE_FILL_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
+                                fillColor("#00E5FF")
+                                fillOpacity(0.25)
+                            },
+                            belowLayerId
+                        )
+                        
+                        style.addLayerAbove(
+                            lineLayer(USER_CIRCLE_STROKE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
+                                lineColor("#00E5FF")
+                                lineWidth(2.0)
+                            },
+                            USER_CIRCLE_FILL_LAYER_ID
+                        )
+                    } else {
+                        style.addLayer(
+                            fillLayer(USER_CIRCLE_FILL_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
+                                fillColor("#00E5FF")
+                                fillOpacity(0.25)
+                            }
+                        )
+                        
+                        style.addLayer(
+                            lineLayer(USER_CIRCLE_STROKE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
+                                lineColor("#00E5FF")
+                                lineWidth(2.0)
+                            }
+                        )
+                    }
                     
-                    // Add stroke layer (bordo) - ABOVE fill but BELOW symbols
-                    style.addLayer(
-                        lineLayer(USER_CIRCLE_STROKE_LAYER_ID, USER_CIRCLE_SOURCE_ID) {
-                            lineColor("#00E5FF")
-                            lineWidth(2.0)
-                        }
-                    )
-                    
-                    android.util.Log.i("MapboxNativePlugin", "✅ Circle polygon added BELOW symbols: radius=${radius}m (world-space)")
+                    android.util.Log.i("MapboxNativePlugin", "✅ Circle layers added at BOTTOM of layer stack (BELOW all symbols and annotations)")
                     call.resolve(JSObject().put("status", "success").put("circleId", "user-circle"))
                 }
             } catch (e: Exception) {
@@ -881,23 +897,36 @@ class MapboxNativePlugin : Plugin() {
                     latitude = annotation.point.latitude(),
                     longitude = annotation.point.longitude(),
                     label = "",
-                    markerSize = 120f,
+                    markerSize = 80f * bridge.context.resources.displayMetrics.density,
                     opacity = annotation.iconOpacity?.toFloat() ?: 1f,
                     isClickable = true
                 )
             }
         }
         
-        pointAnnotationManager?.deleteAll()
-        whisperAnnotations.clear()
-        
         val clustered = clusterNearbyWhispers(allWhispers)
         
-        clustered.forEach { data ->
-            if (data.isCluster) {
-                createClusterAnnotation(data)
-            } else {
-                createSingleAnnotation(data.whispers.first())
+        coroutineScope.launch {
+            val deferredAnnotations = clustered.map { data ->
+                async {
+                    if (data.isCluster) {
+                        createClusterAnnotationBitmap(data)
+                    } else {
+                        createSingleAnnotationBitmap(data.whispers.first())
+                    }
+                }
+            }
+            
+            val annotationOptions = deferredAnnotations.awaitAll()
+            
+            withContext(Dispatchers.Main) {
+                pointAnnotationManager?.deleteAll()
+                whisperAnnotations.clear()
+                
+                annotationOptions.forEach { (options, whisperId) ->
+                    val annotation = pointAnnotationManager?.create(options)
+                    annotation?.let { whisperAnnotations[whisperId] = it }
+                }
             }
         }
     }
@@ -930,6 +959,29 @@ class MapboxNativePlugin : Plugin() {
         }
     }
     
+    private suspend fun createSingleAnnotationBitmap(data: WhisperAnnotationData): Pair<PointAnnotationOptions, String> {
+        val bitmap = withContext(Dispatchers.IO) {
+            generateCircularMarkerBitmap(
+                profileImageUrl = data.iconUrl,
+                initials = data.initials,
+                avatarColor = data.avatarColor,
+                expiryColor = data.expiryColor,
+                size = data.markerSize
+            )
+        }
+        
+        val pointAnnotationOptions = PointAnnotationOptions()
+            .withPoint(Point.fromLngLat(data.longitude, data.latitude))
+            .withIconImage(bitmap)
+            .withIconOpacity(data.opacity.toDouble())
+            .withData(com.google.gson.JsonObject().apply {
+                addProperty("whisperId", data.whisperId)
+                addProperty("isClickable", data.isClickable)
+            })
+        
+        return Pair(pointAnnotationOptions, data.whisperId)
+    }
+    
     private fun createClusterAnnotation(data: ClusterAnnotationData) {
         coroutineScope.launch {
             val mainWhisper = data.whispers.first()
@@ -959,6 +1011,33 @@ class MapboxNativePlugin : Plugin() {
                 pointAnnotationManager?.create(pointAnnotationOptions)
             }
         }
+    }
+    
+    private suspend fun createClusterAnnotationBitmap(data: ClusterAnnotationData): Pair<PointAnnotationOptions, String> {
+        val mainWhisper = data.whispers.first()
+        val moreCount = data.count - 1
+        val moreText = "+$moreCount $moreWhispersTranslation"
+        
+        val bitmap = withContext(Dispatchers.IO) {
+            generateClusterMarkerBitmap(
+                profileImageUrl = mainWhisper.iconUrl,
+                initials = mainWhisper.initials,
+                avatarColor = mainWhisper.avatarColor,
+                expiryColor = mainWhisper.expiryColor,
+                size = mainWhisper.markerSize,
+                moreText = moreText
+            )
+        }
+        
+        val pointAnnotationOptions = PointAnnotationOptions()
+            .withPoint(Point.fromLngLat(data.longitude, data.latitude))
+            .withIconImage(bitmap)
+            .withData(com.google.gson.JsonObject().apply {
+                addProperty("isCluster", true)
+                addProperty("count", data.count)
+            })
+        
+        return Pair(pointAnnotationOptions, "cluster-${data.latitude}-${data.longitude}")
     }
     
     private fun generateCircularMarkerBitmap(
@@ -1155,7 +1234,7 @@ class MapboxNativePlugin : Plugin() {
         val initials: String? = null,
         val avatarColor: String? = null,
         val expiryColor: String? = null,
-        val markerSize: Float = 120f,
+        val markerSize: Float = 160f,
         val opacity: Float = 1f,
         val isClickable: Boolean = true
     )
