@@ -53,6 +53,7 @@ class MapboxNativePlugin : Plugin() {
     private val whisperAnnotations = mutableMapOf<String, PointAnnotation>()
     private val clusterAnnotations = mutableListOf<ClusterAnnotationData>()
     private val cachedWhisperIds = mutableSetOf<String>()
+    private val whisperDataCache = mutableMapOf<String, WhisperAnnotationData>()
     
     private var mockUserAnnotation: PointAnnotation? = null
     private var isMockModeActive = false
@@ -184,6 +185,8 @@ class MapboxNativePlugin : Plugin() {
                 ))
                 
                 this.mapView = mapView
+                
+                mapView.elevation = 0f
                 
                 val rootView = activity.window.decorView.findViewById<FrameLayout>(android.R.id.content)
                 val layoutParams = FrameLayout.LayoutParams(
@@ -428,11 +431,12 @@ class MapboxNativePlugin : Plugin() {
                     initials = if (point.has("initials")) point.getString("initials") else null,
                     avatarColor = if (point.has("avatarColor")) point.getString("avatarColor") else null,
                     expiryColor = if (point.has("expiryColor")) point.getString("expiryColor") else null,
-                    markerSize = if (point.has("markerSize")) point.getDouble("markerSize").toFloat() else 60f,
+                    markerSize = if (point.has("markerSize")) point.getDouble("markerSize").toFloat() else 120f,
                     opacity = if (point.has("opacity")) point.getDouble("opacity").toFloat() else 1.0f,
                     isClickable = if (point.has("isClickable")) point.getBoolean("isClickable") else true
                 )
-                                
+                
+                whisperDataCache[whisperId] = annotationData
                 whisperAnnotationsList.add(annotationData)
             }
             
@@ -866,15 +870,22 @@ class MapboxNativePlugin : Plugin() {
         val allWhispers = whisperAnnotations.values.mapNotNull { annotation ->
             val id = annotation.getData()?.asJsonObject?.get("whisperId")?.asString ?: return@mapNotNull null
             
-            WhisperAnnotationData(
-                whisperId = id,
-                latitude = annotation.point.latitude(),
-                longitude = annotation.point.longitude(),
-                label = "",
-                markerSize = 60f,
-                opacity = annotation.iconOpacity?.toFloat() ?: 1f,
-                isClickable = true
-            )
+            val cachedData = whisperDataCache[id]
+            if (cachedData != null) {
+                cachedData.copy(
+                    opacity = annotation.iconOpacity?.toFloat() ?: 1f
+                )
+            } else {
+                WhisperAnnotationData(
+                    whisperId = id,
+                    latitude = annotation.point.latitude(),
+                    longitude = annotation.point.longitude(),
+                    label = "",
+                    markerSize = 120f,
+                    opacity = annotation.iconOpacity?.toFloat() ?: 1f,
+                    isClickable = true
+                )
+            }
         }
         
         pointAnnotationManager?.deleteAll()
@@ -1144,7 +1155,7 @@ class MapboxNativePlugin : Plugin() {
         val initials: String? = null,
         val avatarColor: String? = null,
         val expiryColor: String? = null,
-        val markerSize: Float = 60f,
+        val markerSize: Float = 120f,
         val opacity: Float = 1f,
         val isClickable: Boolean = true
     )
