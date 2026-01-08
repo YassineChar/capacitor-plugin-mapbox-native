@@ -433,7 +433,7 @@ class MapboxNativePlugin : Plugin() {
                     initials = if (point.has("initials")) point.getString("initials") else null,
                     avatarColor = if (point.has("avatarColor")) point.getString("avatarColor") else null,
                     expiryColor = if (point.has("expiryColor")) point.getString("expiryColor") else null,
-                    markerSize = if (point.has("markerSize")) point.getDouble("markerSize").toFloat() else (80f * bridge.context.resources.displayMetrics.density),
+                    markerSize = if (point.has("markerSize")) point.getDouble("markerSize").toFloat() else 120f,
                     opacity = if (point.has("opacity")) point.getDouble("opacity").toFloat() else 1.0f,
                     isClickable = if (point.has("isClickable")) point.getBoolean("isClickable") else true
                 )
@@ -897,7 +897,7 @@ class MapboxNativePlugin : Plugin() {
                     latitude = annotation.point.latitude(),
                     longitude = annotation.point.longitude(),
                     label = "",
-                    markerSize = 80f * bridge.context.resources.displayMetrics.density,
+                    markerSize = 120f,
                     opacity = annotation.iconOpacity?.toFloat() ?: 1f,
                     isClickable = true
                 )
@@ -1234,7 +1234,7 @@ class MapboxNativePlugin : Plugin() {
         val initials: String? = null,
         val avatarColor: String? = null,
         val expiryColor: String? = null,
-        val markerSize: Float = 160f,
+        val markerSize: Float = 120f,
         val opacity: Float = 1f,
         val isClickable: Boolean = true
     )
