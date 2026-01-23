@@ -11,10 +11,10 @@ npx cap sync
 
 ## Configuration
 
-Add your Mapbox token to `gradle.properties`:
+Add your Mapbox secret token to your project's `android/gradle.properties` :
 
 ```properties
-MAPBOX_DOWNLOADS_TOKEN=your_secret_token_here
+MAPBOX_DOWNLOADS_TOKEN=YOUR_SECRET_TOKEN_HERE
 ```
 
 ## API

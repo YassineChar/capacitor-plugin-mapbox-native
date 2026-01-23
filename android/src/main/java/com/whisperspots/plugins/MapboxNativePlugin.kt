@@ -164,21 +164,7 @@ class MapboxNativePlugin : Plugin() {
                 android.util.Log.i("MapboxNativePlugin", "🏗️ Creating MapView...")
                 
                 val styleUri = call.getString("styleUri") ?: run {
-                    val nightModeFlags = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
-                    when (nightModeFlags) {
-                        android.content.res.Configuration.UI_MODE_NIGHT_YES -> {
-                            android.util.Log.i("MapboxNativePlugin", "🌙 Dark mode detected - using night style")
-                            "mapbox://styles/zpalah/cmfwv2ibl000701r3398e20ps"
-                        }
-                        android.content.res.Configuration.UI_MODE_NIGHT_NO -> {
-                            android.util.Log.i("MapboxNativePlugin", "☀️ Light mode detected - using day style")
-                            "mapbox://styles/zpalah/cmfwvtnd200dx01sbb5y043o7"
-                        }
-                        else -> {
-                            android.util.Log.i("MapboxNativePlugin", "🌓 Default mode - using night style")
-                            "mapbox://styles/zpalah/cmfwv2ibl000701r3398e20ps"
-                        }
-                    }
+                    "mapbox://styles/zpalah/cmfwvtnd200dx01sbb5y043o7"
                 }
                 
                 val mapView = MapView(context, MapInitOptions(
