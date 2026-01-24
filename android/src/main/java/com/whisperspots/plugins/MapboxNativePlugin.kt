@@ -18,6 +18,7 @@ import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
 import com.mapbox.geojson.Polygon
 import com.mapbox.maps.*
+import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.addLayerAt
 import com.mapbox.maps.extension.style.layers.addLayerBelow
@@ -499,10 +500,21 @@ class MapboxNativePlugin : Plugin() {
                 .zoom(zoom)
                 .build()
             
-            mapboxMap?.setCamera(cameraOptions)
-            
-            android.util.Log.i("MapboxNativePlugin", "✅ Camera moved to target position")
-            
+            if (animated) {
+                // SMOOTH ANIMATED TRANSITION 
+                android.util.Log.i("MapboxNativePlugin", "✈️ Using flyTo() for smooth animation")
+                mapboxMap?.flyTo(
+                    cameraOptions,
+                    MapAnimationOptions.Builder()
+                        .duration(1000) // 1 second smooth animation (iOS default)
+                        .build()
+                )
+            } else {
+                // INSTANT TELEPORT
+                android.util.Log.i("MapboxNativePlugin", "⚡ Using setCamera() for instant move")
+                mapboxMap?.setCamera(cameraOptions)
+            }
+                        
             call.resolve(JSObject().put("status", "success"))
         }
     }
@@ -734,17 +746,97 @@ class MapboxNativePlugin : Plugin() {
                 
                 if (distance < 30.0) {
                     val data = annotation.getData()?.asJsonObject
-                    if (data != null) {
-                        if (data.has("isCluster") && data.get("isCluster").asBoolean) {
-                            val count = data.get("count").asInt
-                            notifyListeners("onClusterTap", JSObject().apply {
-                                put("count", count)
-                                put("latitude", annotation.point.latitude())
-                                put("longitude", annotation.point.longitude())
-                            })
+                    if (data != null && data.has("isCluster") && data.get("isCluster").asBoolean) {
+                        val count = data.get("count").asInt
+                        val clusterLat = annotation.point.latitude()
+                        val clusterLon = annotation.point.longitude()
+                        
+                        android.util.Log.d("MapboxNativePlugin", "🎯 Cluster tapped with $count whispers at lat=$clusterLat, lon=$clusterLon")
+                        
+                        // CALCULATE ZOOM to separate ALL whispers
+                        // Find max distance between whispers in this cluster
+                        val clusterData = clusterAnnotations.find { 
+                            kotlin.math.abs(it.latitude - clusterLat) < 0.0001 && 
+                            kotlin.math.abs(it.longitude - clusterLon) < 0.0001 
+                        }
+                        
+                        if (clusterData != null) {
+                            var maxDistance = 0.0
+                            val whispers = clusterData.whispers
+                            
+                            for (i in whispers.indices) {
+                                for (j in (i + 1) until whispers.size) {
+                                    val dist = calculateDistance(
+                                        whispers[i].latitude, whispers[i].longitude,
+                                        whispers[j].latitude, whispers[j].longitude
+                                    )
+                                    maxDistance = kotlin.math.max(maxDistance, dist)
+                                }
+                            }
+                            
+                            android.util.Log.d("MapboxNativePlugin", "🎯 Cluster maxDistance = $maxDistance meters")
+                            
+                            // Calculate target zoom based on distance (same tiers as iOS)
+                            val calculatedZoom = when {
+                                maxDistance > 50000 -> 9.0    // 50km+ → zoom 9
+                                maxDistance > 10000 -> 11.5   // 10-50km → zoom 11.5
+                                maxDistance > 2000 -> 13.5    // 2-10km → zoom 13.5
+                                maxDistance > 500 -> 15.5     // 500m-2km → zoom 15.5
+                                maxDistance > 200 -> 17.5     // 200-500m → zoom 17.5
+                                maxDistance > 50 -> 18.5      // 50-200m → zoom 18.5
+                                else -> 19.0                   // < 50m → zoom 19
+                            }
+                            
+                            val currentZoom = mapboxMap?.cameraState?.zoom ?: 14.0
+                            val targetZoom = kotlin.math.max(calculatedZoom, currentZoom + 1.0)
+                            
+                            android.util.Log.d("MapboxNativePlugin", "🎯 Zooming from $currentZoom to $targetZoom (calculated=$calculatedZoom)")
+                            
+                            // SMOOTH ANIMATED ZOOM (like iOS setRegion animated:true)
+                            val cameraOptions = CameraOptions.Builder()
+                                .center(Point.fromLngLat(clusterLon, clusterLat))
+                                .zoom(targetZoom)
+                                .build()
+                            
+                            mapboxMap?.flyTo(
+                                cameraOptions,
+                                MapAnimationOptions.Builder()
+                                    .duration(1000) // 1 second smooth animation (match iOS)
+                                    .build()
+                            )
+                            
+                            // RECLUSTER after zoom animation completes (1000ms animation + 100ms buffer)
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                android.util.Log.d("MapboxNativePlugin", "🎯 Reclustering after zoom animation")
+                                reclusterWhispers()
+                            }, 1100)
+                            
                             return@OnMapClickListener true
                         }
                         
+                        // Fallback: emit event but also zoom in
+                        notifyListeners("onClusterTap", JSObject().apply {
+                            put("count", count)
+                            put("latitude", clusterLat)
+                            put("longitude", clusterLon)
+                        })
+                        return@OnMapClickListener true
+                    }
+                }
+            }
+            
+            // SINGLE WHISPER TAP (lower priority)
+            pointAnnotationManager?.annotations?.forEach { annotation ->
+                val annotationPoint = mapboxMap?.pixelForCoordinate(annotation.point) ?: return@forEach
+                
+                val distance = kotlin.math.sqrt(
+                    (clickedPoint.x - annotationPoint.x).toDouble().pow(2) + 
+                    (clickedPoint.y - annotationPoint.y).toDouble().pow(2)
+                )
+                
+                if (distance < 30.0) {
+                    val data = annotation.getData()?.asJsonObject
+                    if (data != null) {
                         if (data.has("whisperId")) {
                             val whisperId = data.get("whisperId").asString
                             val isClickable = if (data.has("isClickable")) data.get("isClickable").asBoolean else true
@@ -872,36 +964,55 @@ class MapboxNativePlugin : Plugin() {
         android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Reclustering whispers - START")
         android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Current whisperAnnotations count: ${whisperAnnotations.size}")
         android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Current whisperDataCache count: ${whisperDataCache.size}")
+        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Current clusterAnnotations count: ${clusterAnnotations.size}")
         
-        val allWhispers = whisperAnnotations.values.mapNotNull { annotation ->
-            val id = annotation.getData()?.asJsonObject?.get("whisperId")?.asString ?: return@mapNotNull null
+        // Extract ALL individual whispers from existing annotations
+        // This includes BOTH single whispers AND whispers inside clusters
+        val allWhispers = mutableListOf<WhisperAnnotationData>()
+        
+        // Extract from clusters
+        clusterAnnotations.forEach { cluster ->
+            android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Extracting ${cluster.whispers.size} whispers from cluster at lat=${cluster.latitude}, lon=${cluster.longitude}")
+            allWhispers.addAll(cluster.whispers)
+        }
+        
+        // Add individual whispers (those that weren't clustered)
+        whisperAnnotations.forEach { (whisperId, annotation) ->
+            // Check if this whisper is NOT already in a cluster
+            val isInCluster = clusterAnnotations.any { cluster ->
+                cluster.whispers.any { it.whisperId == whisperId }
+            }
             
-            val cachedData = whisperDataCache[id]
-            if (cachedData != null) {
-                cachedData.copy(
-                    opacity = annotation.iconOpacity?.toFloat() ?: 1f
-                )
-            } else {
-                android.util.Log.w("MapboxNativePlugin", "⚠️ [ZOOM] Whisper $id not in cache, creating from annotation")
-                WhisperAnnotationData(
-                    whisperId = id,
-                    latitude = annotation.point.latitude(),
-                    longitude = annotation.point.longitude(),
-                    label = "",
-                    markerSize = 120f,
-                    opacity = annotation.iconOpacity?.toFloat() ?: 1f,
-                    isClickable = true
-                )
+            if (!isInCluster) {
+                android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Adding individual whisper: $whisperId")
+                val cachedData = whisperDataCache[whisperId]
+                if (cachedData != null) {
+                    allWhispers.add(cachedData.copy(
+                        opacity = annotation.iconOpacity?.toFloat() ?: 1f
+                    ))
+                } else {
+                    android.util.Log.w("MapboxNativePlugin", "⚠️ [ZOOM] Whisper $whisperId not in cache, creating from annotation")
+                    allWhispers.add(WhisperAnnotationData(
+                        whisperId = whisperId,
+                        latitude = annotation.point.latitude(),
+                        longitude = annotation.point.longitude(),
+                        label = "",
+                        markerSize = 120f,
+                        opacity = annotation.iconOpacity?.toFloat() ?: 1f,
+                        isClickable = true
+                    ))
+                }
             }
         }
         
-        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Extracted ${allWhispers.size} whispers from annotations")
+        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Total whispers extracted: ${allWhispers.size}")
         
         if (allWhispers.isEmpty()) {
             android.util.Log.e("MapboxNativePlugin", "❌ [ZOOM] NO WHISPERS TO RECLUSTER! Aborting to prevent clearing map")
             return
         }
         
+        // Re-cluster with NEW zoom level
         val clustered = clusterNearbyWhispers(allWhispers)
         android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Clustering produced ${clustered.size} clusters/markers")
         
