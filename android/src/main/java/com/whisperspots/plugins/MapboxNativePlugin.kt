@@ -869,6 +869,10 @@ class MapboxNativePlugin : Plugin() {
     }
     
     private fun reclusterWhispers() {
+        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Reclustering whispers - START")
+        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Current whisperAnnotations count: ${whisperAnnotations.size}")
+        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Current whisperDataCache count: ${whisperDataCache.size}")
+        
         val allWhispers = whisperAnnotations.values.mapNotNull { annotation ->
             val id = annotation.getData()?.asJsonObject?.get("whisperId")?.asString ?: return@mapNotNull null
             
@@ -878,6 +882,7 @@ class MapboxNativePlugin : Plugin() {
                     opacity = annotation.iconOpacity?.toFloat() ?: 1f
                 )
             } else {
+                android.util.Log.w("MapboxNativePlugin", "⚠️ [ZOOM] Whisper $id not in cache, creating from annotation")
                 WhisperAnnotationData(
                     whisperId = id,
                     latitude = annotation.point.latitude(),
@@ -890,7 +895,15 @@ class MapboxNativePlugin : Plugin() {
             }
         }
         
+        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Extracted ${allWhispers.size} whispers from annotations")
+        
+        if (allWhispers.isEmpty()) {
+            android.util.Log.e("MapboxNativePlugin", "❌ [ZOOM] NO WHISPERS TO RECLUSTER! Aborting to prevent clearing map")
+            return
+        }
+        
         val clustered = clusterNearbyWhispers(allWhispers)
+        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Clustering produced ${clustered.size} clusters/markers")
         
         coroutineScope.launch {
             val deferredAnnotations = clustered.map { data ->
@@ -905,14 +918,28 @@ class MapboxNativePlugin : Plugin() {
             
             val annotationOptions = deferredAnnotations.awaitAll()
             
+            android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Created ${annotationOptions.size} annotation options from async bitmap generation")
+            
+            if (annotationOptions.isEmpty()) {
+                android.util.Log.e("MapboxNativePlugin", "❌ [ZOOM] NO ANNOTATION OPTIONS! Aborting to prevent clearing map")
+                return@launch
+            }
+            
             withContext(Dispatchers.Main) {
+                android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Deleting ${whisperAnnotations.size} old annotations")
                 pointAnnotationManager?.deleteAll()
                 whisperAnnotations.clear()
                 
+                android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Creating ${annotationOptions.size} new annotations")
                 annotationOptions.forEach { (options, whisperId) ->
                     val annotation = pointAnnotationManager?.create(options)
-                    annotation?.let { whisperAnnotations[whisperId] = it }
+                    annotation?.let { 
+                        whisperAnnotations[whisperId] = it
+                        android.util.Log.v("MapboxNativePlugin", "🔄 [ZOOM] Created annotation for whisper: $whisperId")
+                    }
                 }
+                
+                android.util.Log.d("MapboxNativePlugin", "✅ [ZOOM] Reclustering COMPLETE - ${whisperAnnotations.size} annotations on map")
             }
         }
     }
