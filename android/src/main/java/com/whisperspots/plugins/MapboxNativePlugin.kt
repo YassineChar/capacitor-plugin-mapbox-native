@@ -431,6 +431,15 @@ class MapboxNativePlugin : Plugin() {
             
             val clusteredAnnotations = clusterNearbyWhispers(whisperAnnotationsList)
             
+            // Store cluster data for cluster tap detection
+            clusterAnnotations.clear()
+            clusteredAnnotations.forEach { data ->
+                if (data.isCluster) {
+                    clusterAnnotations.add(data)
+                    android.util.Log.d("MapboxNativePlugin", "📍 Storing cluster data with ${data.whispers.size} whispers at lat=${data.latitude}, lon=${data.longitude}")
+                }
+            }
+            
             clusteredAnnotations.forEach { data ->
                 if (data.isCluster) {
                     createClusterAnnotation(data)
@@ -438,6 +447,8 @@ class MapboxNativePlugin : Plugin() {
                     createSingleAnnotation(data.whispers.first())
                 }
             }
+            
+            android.util.Log.d("MapboxNativePlugin", "✅ setValuesMapbox COMPLETE - ${clusteredAnnotations.size} total annotations (${clusterAnnotations.size} clusters)")
             
             call.resolve(JSObject().put("status", "success"))
         }
@@ -1040,6 +1051,7 @@ class MapboxNativePlugin : Plugin() {
                 android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Deleting ${whisperAnnotations.size} old annotations")
                 pointAnnotationManager?.deleteAll()
                 whisperAnnotations.clear()
+                clusterAnnotations.clear() // Clear old cluster data too
                 
                 android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Creating ${annotationOptions.size} new annotations")
                 annotationOptions.forEach { (options, whisperId) ->
@@ -1050,7 +1062,16 @@ class MapboxNativePlugin : Plugin() {
                     }
                 }
                 
-                android.util.Log.d("MapboxNativePlugin", "✅ [ZOOM] Reclustering COMPLETE - ${whisperAnnotations.size} annotations on map")
+                // Rebuild clusterAnnotations list after reclustering
+                // This is needed for cluster tap to find whisper data
+                clustered.forEach { clusterData ->
+                    if (clusterData.isCluster) {
+                        clusterAnnotations.add(clusterData)
+                        android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Stored cluster data with ${clusterData.whispers.size} whispers at lat=${clusterData.latitude}, lon=${clusterData.longitude}")
+                    }
+                }
+                
+                android.util.Log.d("MapboxNativePlugin", "✅ [ZOOM] Reclustering COMPLETE - ${whisperAnnotations.size} annotations, ${clusterAnnotations.size} clusters on map")
             }
         }
     }
@@ -1132,7 +1153,16 @@ class MapboxNativePlugin : Plugin() {
                         addProperty("count", data.count)
                     })
                 
-                pointAnnotationManager?.create(pointAnnotationOptions)
+                val clusterAnnotation = pointAnnotationManager?.create(pointAnnotationOptions)
+                
+                //  Store ALL individual whisper IDs from this cluster in whisperAnnotations
+                // This allows reclusterWhispers() to extract them later
+                data.whispers.forEach { whisper ->
+                    clusterAnnotation?.let { 
+                        whisperAnnotations[whisper.whisperId] = it
+                        android.util.Log.v("MapboxNativePlugin", "📍 Stored whisper ${whisper.whisperId} in cluster annotation")
+                    }
+                }
             }
         }
     }
