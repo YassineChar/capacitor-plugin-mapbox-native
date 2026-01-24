@@ -1055,11 +1055,34 @@ class MapboxNativePlugin : Plugin() {
                 clusterAnnotations.clear() // Clear old cluster data too
                 
                 android.util.Log.d("MapboxNativePlugin", "🔄 [ZOOM] Creating ${annotationOptions.size} new annotations")
-                annotationOptions.forEach { (options, whisperId) ->
+                
+                // Map annotationOptions to their corresponding cluster data
+                val annotationToClusterMap = mutableMapOf<String, ClusterAnnotationData>()
+                clustered.forEachIndexed { index, clusterData ->
+                    val annotationId = if (clusterData.isCluster) {
+                        "cluster-${clusterData.latitude}-${clusterData.longitude}"
+                    } else {
+                        clusterData.whispers.first().whisperId
+                    }
+                    annotationToClusterMap[annotationId] = clusterData
+                }
+                
+                annotationOptions.forEach { (options, annotationId) ->
                     val annotation = pointAnnotationManager?.create(options)
-                    annotation?.let { 
-                        whisperAnnotations[whisperId] = it
-                        android.util.Log.v("MapboxNativePlugin", "🔄 [ZOOM] Created annotation for whisper: $whisperId")
+                    val clusterData = annotationToClusterMap[annotationId]
+                    
+                    if (annotation != null && clusterData != null) {
+                        if (clusterData.isCluster) {
+                            // CRITICAL: Store ALL whisper IDs from this cluster
+                            clusterData.whispers.forEach { whisper ->
+                                whisperAnnotations[whisper.whisperId] = annotation
+                                android.util.Log.v("MapboxNativePlugin", "🔄 [ZOOM] Stored whisper ${whisper.whisperId} in cluster annotation")
+                            }
+                        } else {
+                            // Single whisper
+                            whisperAnnotations[annotationId] = annotation
+                            android.util.Log.v("MapboxNativePlugin", "🔄 [ZOOM] Created annotation for whisper: $annotationId")
+                        }
                     }
                 }
                 
@@ -1072,7 +1095,7 @@ class MapboxNativePlugin : Plugin() {
                     }
                 }
                 
-                android.util.Log.d("MapboxNativePlugin", "✅ [ZOOM] Reclustering COMPLETE - ${whisperAnnotations.size} annotations, ${clusterAnnotations.size} clusters on map")
+                android.util.Log.d("MapboxNativePlugin", "✅ [ZOOM] Reclustering COMPLETE - ${whisperAnnotations.size} whisper entries, ${clusterAnnotations.size} clusters on map")
             }
         }
     }
@@ -1505,14 +1528,25 @@ class MapboxNativePlugin : Plugin() {
                 return@runOnUiThread
             }
             
+            android.util.Log.i("MapboxNativePlugin", "🎯 Public setCenterAndZoom called: lat=$latitude, lon=$longitude, zoom=$zoom, animated=$animated")
+            
             val cameraOptions = CameraOptions.Builder()
                 .center(Point.fromLngLat(longitude, latitude))
                 .zoom(zoom)
                 .build()
             
-            mapboxMap?.setCamera(cameraOptions)
-            
-            android.util.Log.i("MapboxNativePlugin", "Camera set to lat=$latitude, lon=$longitude, zoom=$zoom, animated=$animated")
+            if (animated) {
+                android.util.Log.i("MapboxNativePlugin", "✈️ Using flyTo() for smooth recenter animation")
+                mapboxMap?.flyTo(
+                    cameraOptions,
+                    MapAnimationOptions.Builder()
+                        .duration(1000)
+                        .build()
+                )
+            } else {
+                android.util.Log.i("MapboxNativePlugin", "⚡ Using setCamera() for instant recenter")
+                mapboxMap?.setCamera(cameraOptions)
+            }
         }
     }
     
