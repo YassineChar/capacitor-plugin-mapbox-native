@@ -74,8 +74,20 @@ class MapboxNativePlugin : Plugin() {
     private var mapHeightOffset: Float = 0f
     
     private var moreWhispersTranslation: String = "more"
-    private var clusteringThreshold: Double = 50.0
     private var lastClusteredZoomLevel: Double = 0.0
+    
+
+    private fun getClusteringThresholdForZoom(zoom: Double): Double {
+        return when {
+            zoom < 14.0 -> 100.0   // City level: 100m threshold (aggressive clustering)
+            zoom < 15.0 -> 50.0    // District: 50m threshold
+            zoom < 16.0 -> 30.0    // Neighborhood: 30m threshold
+            zoom < 17.0 -> 20.0    // Street: 20m threshold
+            zoom < 18.0 -> 10.0    // Building: 10m threshold
+            zoom < 19.0 -> 5.0     // Close-up: 5m threshold
+            else -> 2.0            // Max zoom: 2m threshold (almost no clustering)
+        }
+    }
     
     // Recenter button visibility management
     private var userLocation: Point? = null
@@ -344,9 +356,6 @@ class MapboxNativePlugin : Plugin() {
                 moreWhispersTranslation = it
             }
             
-            call.getDouble("clusteringThreshold")?.let {
-                clusteringThreshold = it
-            }
             
             val incomingWhisperIds = mutableSetOf<String>()
             for (i in 0 until dataPoints.length()) {
@@ -930,6 +939,12 @@ class MapboxNativePlugin : Plugin() {
     
     private fun clusterNearbyWhispers(whispers: List<WhisperAnnotationData>): List<ClusterAnnotationData> {
         if (whispers.isEmpty()) return emptyList()
+        
+        // Get DYNAMIC threshold based on CURRENT zoom level
+        val currentZoom = mapboxMap?.cameraState?.zoom ?: 14.0
+        val clusteringThreshold = getClusteringThresholdForZoom(currentZoom)
+        
+        android.util.Log.d("MapboxNativePlugin", "🔄 [CLUSTER] Zoom=$currentZoom → threshold=${clusteringThreshold}m")
         
         val clustered = mutableListOf<ClusterAnnotationData>()
         val processed = mutableSetOf<String>()
